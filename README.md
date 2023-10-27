@@ -1,4 +1,17 @@
 ## sberf
 Profiling/tracing/visualizing tool based on eBPF
 
-## day one
+Usage
+
+```bash
+sberf stat
+sberf record
+sberf probe(?)
+sberf draw
+```
+
+TODO:
+- design
+- play with bcc
+- implement
+- enjoy
