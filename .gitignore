@@ -1,5 +1,9 @@
-# don't trace executable
+# don't trace executable(including test executable)
 sberf
+sberf_test
 
 # build folder
 build
+
+# exclude test folder
+test

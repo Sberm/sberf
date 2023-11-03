@@ -17,7 +17,7 @@ SRCDIR := src
 # object file @ ./build
 OBJDIR ?= build
 
-OBJS := main.o
+OBJS := sberf.o
 OBJS_BUILT := $(addprefix $(OBJDIR)/,$(OBJS))
 
 all: $(SBERF) $(OBJS_BUILT)
@@ -38,6 +38,22 @@ $(OBJDIR):
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
 
+clean-all:
+	$(call msg,CLEANALL)
+	$(Q)rm -rf $(OBJDIR) $(SBERF) $(TEST)
+
 clean:
 	$(call msg,CLEAN)
 	$(Q)rm -rf $(OBJDIR) $(SBERF)
+
+# tests
+TEST := sberf_test
+TESTDIR = test
+TEST_FILE := test.c
+
+test: $(TEST)
+
+# one liner or one filer
+$(TEST): $(TESTDIR)/$(TEST_FILE)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) $(TESTDIR)/$(TEST_FILE) -o $(TEST)
