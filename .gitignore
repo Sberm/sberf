@@ -1,0 +1,5 @@
+# don't trace executable
+sberf
+
+# build folder
+build
