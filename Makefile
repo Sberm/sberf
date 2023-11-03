@@ -8,8 +8,13 @@ else
 	msg = @printf '	%-8s %s%s\n' "$(1)" "$(2)" "$(if $(3), $(3))";
 endif
 
-SBERF := sberf # := no refernce to variable, expand once and for all
-CFLAGS ?= -g -O2 -Werror -Wall -std=c11 # only assign when it's not yet defined
+# := no refernce to variable, expand once and for all
+SBERF := sberf
+# only assign when it's not yet defined
+CFLAGS ?= -g -O2 -Werror -Wall -std=c11
+# source code @ ./src
+SRCDIR := src
+# object file @ ./build
 OBJDIR ?= build
 
 OBJS := main.o
@@ -24,7 +29,7 @@ sberf: $(OBJS_BUILT)
 
 # this is the equivalence of OBJS_BUILT
 # line symbol "|": build only once.
-$(OBJDIR)/%.o: %.c | $(OBJDIR)
+$(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -c $< -o $@
 
