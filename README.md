@@ -15,3 +15,13 @@ TODO:
 - play with bcc
 - implement
 - enjoy
+
+Building
+
+```
+# debug build
+DEBUG=1 make
+
+# build
+make
+```
