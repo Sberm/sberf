@@ -4,10 +4,10 @@ Profiling/tracing/visualizing tool based on eBPF
 Usage
 
 ```bash
-sberf stat
 sberf record
-sberf probe(?)
-sberf draw
+sberf stat
+sberf top
+sberf graph
 ```
 
 TODO:
@@ -38,3 +38,6 @@ binary /usr/local/bin/sberf
 Documentation:
  man /usr/local/share/man/man1/sberf.1
 ```
+
+perf在browser.c中使用的是libslang绘制tui。
+

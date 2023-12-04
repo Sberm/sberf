@@ -1,3 +1,6 @@
+# vscode settings
+.vscode
+
 # don't trace executable(including test executable)
 sberf
 sberf_test
