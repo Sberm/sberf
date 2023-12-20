@@ -19,7 +19,7 @@ OUTPUT ?= build
 BPFOUT := build_bpf
 BPFTOOL := bpftool
 CLANG ?= clang
-LIBS := libbpf.a
+BPF_LIB := libbpf.a
 
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 | sed 's/arm.*/arm/' \
@@ -64,7 +64,7 @@ $(OUTPUT)/%.o: $(SRCDIR)/%.c $(wildcard $(SRCDIR)/%.h) | $(OUTPUT) $(BPFOUT)
 # TODO: change $(SKEL_BUILT) $(OBJS_BUILT) dependency to target form
 sberf: $(SKEL_BUILT) $(OBJS_BUILT) 
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) -o $@ -l:$(LIBS) 
+	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) -l:$(BPF_LIB) -lelf -lz -o $@ 
 
 all: $(SBERF)
 
