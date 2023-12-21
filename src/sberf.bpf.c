@@ -33,7 +33,7 @@ int handle_tp(void *ctx)
 	if (pid != my_pid)
 		return 0;
 
-	bpf_printk("BPF triggered from PID %d.\n, debug merry christmas! %d", pid, debug);
+	bpf_printk("BPF triggered from PID %d.\n, debug merry christmasss! %d", pid, debug);
 
 	return 0;
 }

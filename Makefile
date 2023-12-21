@@ -31,10 +31,8 @@ VMLINUX ?= foo
 LIBBPF ?= foo
 
 OBJS := sberf.o
-BPFOBJS := sberf.bpf.o
 SKEL := $(patsubst %.o, %.skel.h,$(OBJS))
 OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
-BPFOBJS_BUILT := $(addprefix $(BPFOUT)/,$(BPFOBJS))
 SKEL_BUILT := $(addprefix $(BPFOUT)/,$(SKEL))
 
 INCLUDE := /usr/include
@@ -53,12 +51,12 @@ $(BPFOUT)/%.skel.h: $(BPFOUT)/%.bpf.o | $(BPFOUT)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
 # object file for normal .c file
-$(OUTPUT)/%.o: $(SRCDIR)/%.c $(wildcard $(SRCDIR)/%.h) | $(OUTPUT) $(BPFOUT)
+$(OUTPUT)/%.o: $(SRCDIR)/%.c $(wildcard $(SRCDIR)/%.h) $(SKEL_BUILT) | $(OUTPUT) $(BPFOUT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(BPFOUT) -I$(INCLUDE) -c $(filter %.c,$^) -o $@
 
 # sberf executable
-sberf: $(SKEL_BUILT) $(OBJS_BUILT) $(BPF_OBJS)
+sberf: $(OBJS_BUILT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) -l:$(BPF_LIB) -lelf -lz -o $@ 
 
