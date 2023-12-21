@@ -1,5 +1,3 @@
-# Q = @ # quiet
-
 ifeq ($(DEBUG), 1)
 	Q =
 	msg =
@@ -32,20 +30,22 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 VMLINUX ?= foo
 LIBBPF ?= foo
 
-
 OBJS := sberf.o
+BPFOBJS := sberf.bpf.o
 SKEL := $(patsubst %.o, %.skel.h,$(OBJS))
 OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
+BPFOBJS_BUILT := $(addprefix $(BPFOUT)/,$(BPFOBJS))
 SKEL_BUILT := $(addprefix $(BPFOUT)/,$(SKEL))
 
 INCLUDE := /usr/include
 
-# bpf.o object
+# bpf.o object (Clang generates *.tmp.bpf.o, which is used to generate *.bpf.o)
 $(BPFOUT)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard $(SRCDIR)/%.h) | $(BPFOUT)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
 		-c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+	rm -rf $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # skeleton header
 $(BPFOUT)/%.skel.h: $(BPFOUT)/%.bpf.o | $(BPFOUT)
@@ -57,17 +57,12 @@ $(OUTPUT)/%.o: $(SRCDIR)/%.c $(wildcard $(SRCDIR)/%.h) | $(OUTPUT) $(BPFOUT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(BPFOUT) -I$(INCLUDE) -c $(filter %.c,$^) -o $@
 
-# trash
-#$(Q)$(CC) $(CFLAGS) -l:$(LIBS) $^ -o $@
-
 # sberf executable
-# TODO: change $(SKEL_BUILT) $(OBJS_BUILT) dependency to target form
-sberf: $(SKEL_BUILT) $(OBJS_BUILT) 
+sberf: $(SKEL_BUILT) $(OBJS_BUILT) $(BPF_OBJS)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) -l:$(BPF_LIB) -lelf -lz -o $@ 
 
 all: $(SBERF)
-
 
 # all obj file will be stored in build directory
 $(OUTPUT):
