@@ -7,6 +7,7 @@ sberf_test
 
 # build folder
 build
+build_bpf
 
 # exclude test folder
 test
