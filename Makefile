@@ -33,6 +33,7 @@ LIBBPF ?= foo
 OBJS := sberf.o
 SKEL := $(patsubst %.o, %.skel.h,$(OBJS))
 OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
+# bpf.c is condensed into SKEL_BUILT
 SKEL_BUILT := $(addprefix $(BPFOUT)/,$(SKEL))
 
 INCLUDE := /usr/include
@@ -50,7 +51,7 @@ $(BPFOUT)/%.skel.h: $(BPFOUT)/%.bpf.o | $(BPFOUT)
 	$(call msg,SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
-# object file for normal .c file
+# object file for normal .c file, not the bpf.c file.(specified in OBJS variable)
 $(OUTPUT)/%.o: $(SRCDIR)/%.c $(wildcard $(SRCDIR)/%.h) $(SKEL_BUILT) | $(OUTPUT) $(BPFOUT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(BPFOUT) -I$(INCLUDE) -c $(filter %.c,$^) -o $@

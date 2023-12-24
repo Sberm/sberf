@@ -10,3 +10,11 @@ build
 
 # exclude test folder
 test
+
+# eBPF header
+vmlinux.h
+
+null
+
+*.o
+*.skel.h
