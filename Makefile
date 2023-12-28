@@ -1,3 +1,13 @@
+# 编译逻辑
+# *.bpf.c: CLANG生成eBPF目标文件*.bpf.o(在build_bpf文件夹中)
+# *.bpf.o 通过bpftool生成skeleton header, 即sberf.skel.h(在build_bpf文件夹中)
+# *.c: include上一步生成的skeleton header, 通过cc生成常规.o文件(在build文件夹中)
+# 最后通过cc, 将所有常规.o文件链接，生成sberf可执行文件
+# bpf.c --> bpf.o --> skel.h
+#                       \_ .c -> .o
+#                                 \_ sberf
+
+
 ifeq ($(DEBUG), 1)
 	Q =
 	msg =
@@ -6,9 +16,7 @@ else
 	msg = @printf '	%-8s %s%s\n' "$(1)" "$(2)" "$(if $(3), $(3))";
 endif
 
-# := no refernce to variable, expand once and for all
 SBERF := sberf
-# only assign when it's not yet defined
 CFLAGS ?= -g -O2 -Werror -Wall -std=c11
 # source code @ ./src
 SRCDIR := src
@@ -30,12 +38,14 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 VMLINUX ?= foo
 LIBBPF ?= foo
 
+# 所有目标.o文件
 OBJS := sberf.o
 SKEL := $(patsubst %.o, %.skel.h,$(OBJS))
 OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
 # bpf.c is condensed into SKEL_BUILT
 SKEL_BUILT := $(addprefix $(BPFOUT)/,$(SKEL))
 
+# include搜索目录
 INCLUDE := /usr/include
 
 # bpf.o object (Clang generates *.tmp.bpf.o, which is used to generate *.bpf.o)
