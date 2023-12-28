@@ -7,7 +7,16 @@ Profiling/tracing/visualizing tool based on eBPF
 
 2. 安装[libbpf](https://github.com/libbpf/libbpf)
 
-3. 编译
+3. 安装Clang
+
+```bash
+# ubuntu
+sudo apt-get install clang
+# centos
+sudo yum install clang
+```
+
+4. 编译
 
 ```
 # 打印调试信息
