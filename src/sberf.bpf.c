@@ -18,11 +18,14 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
 #include <linux/bpf.h>
+#include <linux/bpf_common.h>
 #include <bpf/bpf_helpers.h>
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 int my_pid = 0;
+const int size = 1024;
+char buf[size];
 
 SEC("tp/syscalls/sys_enter_write")
 int handle_tp(void *ctx)
@@ -35,5 +38,8 @@ int handle_tp(void *ctx)
 
 	bpf_printk("BPF triggered from PID %d.\n, debug merry lunar new year!! %d", pid, debug);
 
+	int r = bpf_get_stack(ctx, &buf, size, BPF_F_USER_STACK);
+	bpf_printk("this is suppose to be stack traces, length of %d: ", r);
+	bpf_printk("%s\n", buf);
 	return 0;
 }
