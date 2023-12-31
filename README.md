@@ -1,4 +1,4 @@
-## sberf
+## Sberf
 Profiling/tracing/visualizing tool based on eBPF
 
 #### 编译
