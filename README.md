@@ -12,6 +12,7 @@ Profiling/tracing/visualizing tool based on eBPF
 ```bash
 # ubuntu
 sudo apt-get install clang
+
 # centos
 sudo yum install clang
 ```
