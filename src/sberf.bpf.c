@@ -27,6 +27,16 @@ int my_pid = 0;
 const int size = 1024;
 char buf[size];
 
+/** @brief
+ *  
+ *  This is a function that does...
+ *  
+ *  @param void* ctx
+ *  The context of eBPF program.
+ *  
+ *  @return int
+ */
+
 SEC("tp/syscalls/sys_enter_write")
 int handle_tp(void *ctx)
 {
