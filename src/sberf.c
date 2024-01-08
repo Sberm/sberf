@@ -17,8 +17,6 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-// 今天我可是啥也没做
-
 #include <bpf/libbpf.h>
 #include "sberf.skel.h"
 #include <stdio.h>
