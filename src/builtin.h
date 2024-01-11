@@ -17,8 +17,8 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#ifndef RECORD_H
-#define RECORD_H
+#ifndef BUILTIN_H
+#define BUILTIN_H
 
 int cmd_record(int argc, char** argv);
 
