@@ -21,5 +21,6 @@
 #define BUILTIN_H
 
 int cmd_record(int argc, char** argv);
+int cmd_plot(int argc, char** argv);
 
 #endif
