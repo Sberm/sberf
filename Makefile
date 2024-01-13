@@ -1,4 +1,4 @@
-# 编译逻辑
+# 编译流程
 # *.bpf.c: CLANG生成eBPF目标文件*.bpf.o(在build_bpf文件夹中)
 # *.bpf.o 通过bpftool生成skeleton header, 即sberf.skel.h(在build_bpf文件夹中)
 # *.c: include上一步生成的skeleton header, 通过cc生成常规.o文件(在build文件夹中)

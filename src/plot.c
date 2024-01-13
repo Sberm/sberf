@@ -17,7 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#include "builtin.h"
+#include "sub_commands.h"
 
 int cmd_plot(int argc, char** argv)
 {
