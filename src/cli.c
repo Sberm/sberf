@@ -30,4 +30,6 @@ static struct cmd_struct commands[] = {
 	{"plot", cmd_plot},
 };
 
-
+void init()
+{
+}
