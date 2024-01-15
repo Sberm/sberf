@@ -30,6 +30,9 @@ static struct cmd_struct commands[] = {
 	{"plot", cmd_plot},
 };
 
-void init()
+void parse_args()
 {
+	for (int i = 0;i < ARRAY_LEN(commands); i++) {
+		// parse
+	}
 }
