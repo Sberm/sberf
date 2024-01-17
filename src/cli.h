@@ -16,4 +16,9 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#ifndef CLI_H
+#define CLI_H
 
+void parse_args(int argc, char** argv);
+
+#endif

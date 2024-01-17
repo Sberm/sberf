@@ -17,12 +17,16 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#include "cli.h"
 #include <stdio.h>
+#include <string.h>
+
+#include "cli.h"
+#include "util.h"
+#include "sub_commands.h"
 
 struct cmd_struct {
 	const char* cmd;
-	int (*fn)(int, const char**);
+	int (*fn)(int, char**);
 };
 
 static struct cmd_struct commands[] = {
@@ -30,9 +34,28 @@ static struct cmd_struct commands[] = {
 	{"plot", cmd_plot},
 };
 
-void parse_args()
+void print_help() {
+	printf("USAGE:\nsberf record <PID>\nsberf plot <REC>\n");
+}
+
+void parse_args(int argc, char** argv)
 {
+	if (argc < 2) {
+		print_help();
+		return;
+	}
+
+	int parse_flag = 0;
 	for (int i = 0;i < ARRAY_LEN(commands); i++) {
-		// parse
+		if (strcmp(commands[i].cmd, argv[1]) == 0) {
+			printf("%s commands\n", argv[1]);
+			parse_flag = 1;
+			break;
+		}
+	}
+
+	if (!parse_flag) {
+		print_help();
+		return;
 	}
 }

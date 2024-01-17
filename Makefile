@@ -17,10 +17,8 @@ else
 endif
 
 SBERF := sberf
-CFLAGS ?= -g -O2 -Werror -Wall -std=c11
-# source code @ ./src
+CFLAGS ?= -g -O2 -Werror -std=c11
 SRCDIR := src
-# object file @ ./build
 OUTPUT ?= build
 BPFOUT := build_bpf
 BPFTOOL := bpftool
@@ -38,15 +36,17 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 VMLINUX ?= foo
 LIBBPF ?= foo
 
-# 所有目标.o文件
-OBJS := sberf.o
-SKEL := $(patsubst %.o, %.skel.h,$(OBJS))
-OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
-# bpf.c is condensed into SKEL_BUILT
+# bpf.c文件
+BPF_FILE := sberf.bpf.c
+SKEL := $(patsubst %.bpf.c, %.skel.h,$(BPF_FILE))
 SKEL_BUILT := $(addprefix $(BPFOUT)/,$(SKEL))
 
+# 所有目标.o文件
+OBJS := sberf.o cli.o record.o util.o plot.o
+OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
+
 # include搜索目录
-INCLUDE := /usr/include
+INCLUDE := /usr/include:src
 
 # bpf.o object (Clang generates *.tmp.bpf.o, which is used to generate *.bpf.o)
 $(BPFOUT)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard $(SRCDIR)/%.h) | $(BPFOUT)
@@ -54,7 +54,7 @@ $(BPFOUT)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard $(SRCDIR)/%.h) | $(BPFOUT)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
 		-c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
-	rm -rf $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+	#rm -rf $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # skeleton header
 $(BPFOUT)/%.skel.h: $(BPFOUT)/%.bpf.o | $(BPFOUT)
@@ -69,7 +69,7 @@ $(OUTPUT)/%.o: $(SRCDIR)/%.c $(wildcard $(SRCDIR)/%.h) $(SKEL_BUILT) | $(OUTPUT)
 # sberf executable
 sberf: $(OBJS_BUILT)
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) -l:$(BPF_LIB) -lelf -lz -o $@ 
+	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) -I$(INCLUDE) -l:$(BPF_LIB) -lelf -lz -o $@ 
 
 all: $(SBERF)
 
