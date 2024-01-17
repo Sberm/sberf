@@ -35,7 +35,9 @@ static struct cmd_struct commands[] = {
 };
 
 void print_help() {
-	printf("USAGE:\nsberf record <PID>\nsberf plot <REC>\n");
+	printf("USAGE:\n\
+	sberf record <PID>\n\
+	sberf plot <REC>\n");
 }
 
 void parse_args(int argc, char** argv)
