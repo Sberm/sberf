@@ -1,11 +1,12 @@
-# 编译流程
-# *.bpf.c: CLANG生成eBPF目标文件*.bpf.o(在build_bpf文件夹中)
-# *.bpf.o 通过bpftool生成skeleton header, 即sberf.skel.h(在build_bpf文件夹中)
-# *.c: include上一步生成的skeleton header, 通过cc生成常规.o文件(在build文件夹中)
-# 最后通过cc, 将所有常规.o文件链接，生成sberf可执行文件
-# bpf.c --> bpf.o --> skel.h
-#                       \_ .c -> .o
-#                                 \_ sberf
+# *.bpf.c: eBPF c文件
+# *.bpf.o: clang和bpftool生成的eBPF目标文件*.bpf.o(在build_bpf文件夹中)
+# *.skel.h: 使用*.bpf.o, 通过bpftool生成的skeleton header, 如sberf.skel.h(在build_bpf文件夹中)
+# *.c: 普通c文件，通过include skeleton header调用eBPF
+# *.o: 通过cc, 将所有常规.o文件链接，生成sberf可执行文件
+#
+# bpf.c --> bpf.tmp.o --> bpf.o --> skel.h
+#                                      \_ .c -> .o
+#                                 	             \_ sberf
 
 
 ifeq ($(DEBUG), 1)
@@ -20,7 +21,7 @@ SBERF := sberf
 CFLAGS ?= -g -O2 -Werror -std=c11
 SRCDIR := src
 OUTPUT ?= build
-BPFOUT := build_bpf
+SKEL_DIR := build_bpf
 BPFTOOL := bpftool
 CLANG ?= clang
 BPF_LIB := libbpf.a
@@ -39,34 +40,32 @@ LIBBPF ?= foo
 # bpf.c文件
 BPF_FILE := sberf.bpf.c
 SKEL := $(patsubst %.bpf.c, %.skel.h,$(BPF_FILE))
-SKEL_BUILT := $(addprefix $(BPFOUT)/,$(SKEL))
+SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 
-# 所有目标.o文件
+# 所有.c文件的.o文件写在这里
 OBJS := sberf.o cli.o record.o util.o plot.o
 OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
 
-# include搜索目录
 INCLUDE := /usr/include:src
 
-# bpf.o object (Clang generates *.tmp.bpf.o, which is used to generate *.bpf.o)
-$(BPFOUT)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard $(SRCDIR)/%.h) | $(BPFOUT)
+# bpf.c --CLANG--> tmp.bpf.o --BPFTOOL--> bpf.o
+$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c | $(SKEL_DIR)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
 		-c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
-	#rm -rf $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
-# skeleton header
-$(BPFOUT)/%.skel.h: $(BPFOUT)/%.bpf.o | $(BPFOUT)
+# bpf.o --BPFTOOL--> .skel.h
+$(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 	$(call msg,SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
-# object file for normal .c file, not the bpf.c file.(specified in OBJS variable)
-$(OUTPUT)/%.o: $(SRCDIR)/%.c $(wildcard $(SRCDIR)/%.h) $(SKEL_BUILT) | $(OUTPUT) $(BPFOUT)
+# .c --GCC--> .o
+$(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard $(SRCDIR)/%.h) | $(OUTPUT) $(SKEL_DIR)
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) -I$(BPFOUT) -I$(INCLUDE) -c $(filter %.c,$^) -o $@
+	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) -I$(INCLUDE) -c $(filter %.c,$^) -o $@
 
-# sberf executable
+# .o --GCC--> executable
 sberf: $(OBJS_BUILT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) -I$(INCLUDE) -l:$(BPF_LIB) -lelf -lz -o $@ 
@@ -78,7 +77,7 @@ $(OUTPUT):
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
 
-$(BPFOUT):
+$(SKEL_DIR):
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
 
@@ -88,7 +87,7 @@ clean-all:
 
 clean:
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(BPFOUT) $(OUTPUT) $(SBERF)
+	$(Q)rm -rf $(SKEL_DIR) $(OUTPUT) $(SBERF)
 
 # tests
 TEST := sberf_test

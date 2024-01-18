@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "cli.h"
 #include "util.h"
@@ -50,8 +51,8 @@ void parse_args(int argc, char** argv)
 	int parse_flag = 0;
 	for (int i = 0;i < ARRAY_LEN(commands); i++) {
 		if (strcmp(commands[i].cmd, argv[1]) == 0) {
-			printf("%s commands\n", argv[1]);
 			parse_flag = 1;
+			commands[i].fn(argc, argv);
 			break;
 		}
 	}

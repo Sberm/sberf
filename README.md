@@ -40,13 +40,15 @@ make
 #### Makefile编译逻辑
 
 ```bash
-# *.bpf.c: CLANG生成eBPF目标文件*.bpf.o(在build_bpf文件夹中)
-# *.bpf.o 通过bpftool生成skeleton header, 即sberf.skel.h(在build_bpf文件夹中)
-# *.c: include上一步生成的skeleton header, 通过cc生成常规.o文件(在build文件夹中)
-# 最后通过cc, 将所有常规.o文件链接，生成sberf可执行文件
-# bpf.c --> bpf.o --> skel.h
-#                       \_ .c -> .o
-#                                 \_ sberf
+# *.bpf.c: eBPF c文件
+# *.bpf.o: clang和bpftool生成的eBPF目标文件*.bpf.o(在build_bpf文件夹中)
+# *.skel.h: 使用*.bpf.o, 通过bpftool生成的skeleton header, 如sberf.skel.h(在build_bpf文件夹中)
+# *.c: 普通c文件，通过include skeleton header调用eBPF
+# *.o: 通过cc, 将所有常规.o文件链接，生成sberf可执行文件
+#
+# bpf.c --> bpf.tmp.o --> bpf.o --> skel.h
+#                                      \_ .c -> .o
+#                                 	             \_ sberf
 ```
 
 <!--Usage-->

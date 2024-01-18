@@ -17,9 +17,12 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
+#include <stdio.h>
+
 #include "sub_commands.h"
 
 int cmd_record(int argc, char** argv)
 {
-
+	printf("cmd_record\n");
+	return 0;
 }
