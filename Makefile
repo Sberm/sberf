@@ -14,6 +14,7 @@ SKEL_DIR := build_bpf
 BPFTOOL := bpftool
 CLANG ?= clang
 BPF_LIB := libbpf.a
+LLVM_STRIP ?= llvm-strip
 
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 | sed 's/arm.*/arm/' \
@@ -23,7 +24,6 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 | sed 's/riscv64/riscv/' \
 | sed 's/loongarch64/loongarch/')
 
-VMLINUX ?= foo
 LIBBPF ?= foo
 
 # *.bpf.c: eBPF c文件
@@ -48,11 +48,15 @@ OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
 
 INCLUDE := /usr/include:src
 
-# bpf.c --CLANG--> tmp.bpf.o --BPFTOOL--> bpf.o
-$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c | $(SKEL_DIR)
+# bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
+$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard %.h) vmlinux.h | $(SKEL_DIR)
 	$(call msg,BPF,$@)
+	# CLANG生成tmp.bpf.o
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
 		-c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+	# llvm-strip去除tmp.bpf.o中的DWARF信息
+	$(Q)$(LLVM_STRIP) -g $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+	# bpftool生成bpf.o
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # bpf.o --BPFTOOL--> .skel.h
@@ -61,7 +65,7 @@ $(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
 # .c --GCC--> .o
-$(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) | $(OUTPUT) $(SKEL_DIR)
+$(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) | $(OUTPUT) $(SKEL_DIR)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) -I$(INCLUDE) -c $(filter %.c,$^) -o $@
 

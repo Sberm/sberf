@@ -20,9 +20,14 @@
 #include <stdio.h>
 
 #include "sub_commands.h"
+#include "util.h"
 
 int cmd_record(int argc, char** argv)
 {
-	printf("cmd_record\n");
-	return 0;
+	/*printf("cmd_record\n");*/
+	
+
+
+
+	return EXIT_SUCCESS;
 }
