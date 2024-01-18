@@ -23,8 +23,6 @@
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
 
-#include "bootstrap.h"
-#include "bootstrap.skel.h"
 #include "sub_commands.h"
 #include "util.h"
 #include "record.skel.h"

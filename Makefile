@@ -38,7 +38,7 @@ LIBBPF ?= foo
 
 
 # bpf.c文件
-BPF_FILE := sberf.bpf.c
+BPF_FILE := sberf.bpf.c record.bpf.c
 SKEL := $(patsubst %.bpf.c, %.skel.h,$(BPF_FILE))
 SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 
@@ -46,13 +46,14 @@ SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 OBJS := sberf.o cli.o record.o util.o plot.o
 OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
 
-INCLUDE := /usr/include:src
+INCLUDE := .:src:/usr/include
 
 # bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
 $(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard %.h) vmlinux.h | $(SKEL_DIR)
 	$(call msg,BPF,$@)
 	# CLANG生成tmp.bpf.o
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
+		-I./ \
 		-c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	# llvm-strip去除tmp.bpf.o中的DWARF信息
 	$(Q)$(LLVM_STRIP) -g $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
