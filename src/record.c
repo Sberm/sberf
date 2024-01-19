@@ -17,6 +17,8 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
+#include "vmlinux.h"
+
 #include <signal.h>
 #include <stdio.h>
 #include <time.h>
@@ -26,20 +28,12 @@
 #include "sub_commands.h"
 #include "util.h"
 #include "record.skel.h"
+#include "record.h"
 
 static struct env {
-	bool verbose;
+	int verbose;
 	long min_duration_ms;
 } env;
-
-const char *argp_program_version = "bootstrap 0.0";
-const char *argp_program_bug_address = "<bpf@vger.kernel.org>";
-const char argp_program_doc[] = "BPF bootstrap demo application.\n"
-				"\n"
-				"It traces process start and exits and shows associated \n"
-				"information (filename, process duration, PID and PPID, etc).\n"
-				"\n"
-				"USAGE: ./bootstrap [-d <min-duration-ms>] [-v]\n";
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
@@ -48,11 +42,11 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
 	return vfprintf(stderr, format, args);
 }
 
-static volatile bool exiting = false;
+static volatile int exiting = 0;
 
 static void sig_handler(int sig)
 {
-	exiting = true;
+	exiting = 1;
 }
 
 static int handle_event(void *ctx, void *data, size_t data_sz)
@@ -82,8 +76,8 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 
 int cmd_record(int argc, char **argv)
 {
-	struct ring_buffer *rb = NULL;
-	struct bootstrap_bpf *skel;
+	struct perf_buffer *pb = NULL;
+	struct record_bpf *skel;
 	int err;
 
 	/* Set up libbpf errors and debug info callback */
@@ -117,11 +111,11 @@ int cmd_record(int argc, char **argv)
 		goto cleanup;
 	}
 
-	/* Set up ring buffer polling */
-	rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, NULL, NULL);
-	if (!rb) {
+	/* Set up perf buffer polling */
+	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), handle_event, NULL, NULL);
+	if (!pb) {
 		err = -1;
-		fprintf(stderr, "Failed to create ring buffer\n");
+		fprintf(stderr, "Failed to create perf buffer\n");
 		goto cleanup;
 	}
 
@@ -129,7 +123,7 @@ int cmd_record(int argc, char **argv)
 	printf("%-8s %-5s %-16s %-7s %-7s %s\n", "TIME", "EVENT", "COMM", "PID", "PPID",
 	       "FILENAME/EXIT CODE");
 	while (!exiting) {
-		err = ring_buffer__poll(rb, 100 /* timeout, ms */);
+		err = perf_buffer__poll(rb, 100 /* timeout, ms */);
 		/* Ctrl-C will cause -EINTR */
 		if (err == -EINTR) {
 			err = 0;
@@ -143,7 +137,7 @@ int cmd_record(int argc, char **argv)
 
 cleanup:
 	/* Clean up */
-	ring_buffer__free(rb);
+	perf_buffer__free(rb);
 	bootstrap_bpf__destroy(skel);
 
 	return err < 0 ? -err : 0;

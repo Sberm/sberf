@@ -46,27 +46,39 @@ SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 OBJS := sberf.o cli.o record.o util.o plot.o
 OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
 
-INCLUDE := .:src:/usr/include
+INCLUDE := vmlinux:src:/usr/include
+
+# all obj file will be stored in build directory
+$(OUTPUT):
+	$(call msg,MKDIR,$@)
+	@printf '%s\n' "$(OBJS_BUILT)"
+	$(Q)mkdir -p $@
+
+$(SKEL_DIR):
+	$(call msg,MKDIR,$@)
+	$(Q)mkdir -p $@
 
 # bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
 $(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard %.h) vmlinux.h | $(SKEL_DIR)
 	$(call msg,BPF,$@)
 	# CLANG生成tmp.bpf.o
+	# -I.是为了include vmlinux.h
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
-		-I./ \
-		-c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+		-Ivmlinux -c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	# llvm-strip去除tmp.bpf.o中的DWARF信息
 	$(Q)$(LLVM_STRIP) -g $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	# bpftool生成bpf.o
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # bpf.o --BPFTOOL--> .skel.h
+.PRECIOUS: $(SKEL_DIR)/%.skel.h # 编译完了不删掉skel.h
 $(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 	$(call msg,SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
 # .c --GCC--> .o
-$(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) | $(OUTPUT) $(SKEL_DIR)
+# $(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) | $(OUTPUT) $(SKEL_DIR)
+$(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) | $(OUTPUT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) -I$(INCLUDE) -c $(filter %.c,$^) -o $@
 
@@ -76,23 +88,6 @@ sberf: $(OBJS_BUILT)
 	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) -I$(INCLUDE) -l:$(BPF_LIB) -lelf -lz -o $@ 
 
 all: $(SBERF)
-
-# all obj file will be stored in build directory
-$(OUTPUT):
-	$(call msg,MKDIR,$@)
-	$(Q)mkdir -p $@
-
-$(SKEL_DIR):
-	$(call msg,MKDIR,$@)
-	$(Q)mkdir -p $@
-
-clean-all:
-	$(call msg,CLEANALL)
-	$(Q)rm -rf $(OUTPUT) $(SBERF) $(TEST)
-
-clean:
-	$(call msg,CLEAN)
-	$(Q)rm -rf $(SKEL_DIR) $(OUTPUT) $(SBERF)
 
 # tests
 TEST := sberf_test
@@ -105,3 +100,11 @@ test: $(TEST)
 $(TEST): $(TESTDIR)/$(TEST_FILE)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) $(TESTDIR)/$(TEST_FILE) -o $(TEST)
+
+clean-all:
+	$(call msg,CLEAN-ALL)
+	$(Q)rm -rf $(SKEL_DIR) $(OUTPUT) $(SBERF) $(TEST) $(TESTDIR)
+
+clean:
+	$(call msg,CLEAN)
+	$(Q)rm -rf $(SKEL_DIR) $(OUTPUT) $(SBERF)
