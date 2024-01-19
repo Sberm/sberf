@@ -129,7 +129,7 @@ int cmd_record(int argc, char **argv)
 	printf("%-8s %-5s %-16s %-7s %-7s %s\n", "TIME", "EVENT", "COMM", "PID", "PPID",
 	       "FILENAME/EXIT CODE");
 	while (!exiting) {
-		e<Escape>rr = ring_buffer__poll(rb, 100 /* timeout, ms */);
+		err = ring_buffer__poll(rb, 100 /* timeout, ms */);
 		/* Ctrl-C will cause -EINTR */
 		if (err == -EINTR) {
 			err = 0;
