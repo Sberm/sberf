@@ -135,6 +135,5 @@ cleanup:
 
 	bpf_map_delete_elem(&exec_start, &pid);
 	return 0;
-	/*bpf_ringbuf_submit(e, 0);*/
 }
 
