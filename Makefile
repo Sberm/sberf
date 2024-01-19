@@ -7,7 +7,8 @@ else
 endif
 
 SBERF := sberf
-CFLAGS ?= -g -O2 -Werror -std=c11
+#CFLAGS ?= -g -O2 -Werror -std=c11
+CFLAGS ?= -g -O2 -std=c11
 SRCDIR := src
 OUTPUT ?= build
 SKEL_DIR := build_bpf
@@ -15,6 +16,7 @@ BPFTOOL := bpftool
 CLANG ?= clang
 BPF_LIB := libbpf.a
 LLVM_STRIP ?= llvm-strip
+VMLINUX ?= vmlinux/vmlinux.h
 
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 | sed 's/arm.*/arm/' \
@@ -23,8 +25,6 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 | sed 's/mips.*/mips/' \
 | sed 's/riscv64/riscv/' \
 | sed 's/loongarch64/loongarch/')
-
-LIBBPF ?= foo
 
 # *.bpf.c: eBPF c文件
 # *.bpf.o: clang和bpftool生成的eBPF目标文件*.bpf.o(在build_bpf文件夹中)
@@ -46,20 +46,10 @@ SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 OBJS := sberf.o cli.o record.o util.o plot.o
 OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
 
-INCLUDE := vmlinux:src:/usr/include
-
-# all obj file will be stored in build directory
-$(OUTPUT):
-	$(call msg,MKDIR,$@)
-	@printf '%s\n' "$(OBJS_BUILT)"
-	$(Q)mkdir -p $@
-
-$(SKEL_DIR):
-	$(call msg,MKDIR,$@)
-	$(Q)mkdir -p $@
+INCLUDE := -Ivmlinux -Isrc -I/usr/include
 
 # bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
-$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard %.h) vmlinux.h | $(SKEL_DIR)
+$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard %.h) $(VMLINUX) | $(SKEL_DIR)
 	$(call msg,BPF,$@)
 	# CLANG生成tmp.bpf.o
 	# -I.是为了include vmlinux.h
@@ -80,14 +70,24 @@ $(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 # $(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) | $(OUTPUT) $(SKEL_DIR)
 $(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) | $(OUTPUT)
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) -I$(INCLUDE) -c $(filter %.c,$^) -o $@
+	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
 
 # .o --GCC--> executable
 sberf: $(OBJS_BUILT)
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) -I$(INCLUDE) -l:$(BPF_LIB) -lelf -lz -o $@ 
+	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) $(INCLUDE) -l:$(BPF_LIB) -lelf -lz -o $@ 
 
 all: $(SBERF)
+
+# all obj file will be stored in build directory
+$(OUTPUT):
+	$(call msg,MKDIR,$@)
+	@printf '%s\n' "$(OBJS_BUILT)"
+	$(Q)mkdir -p $@
+
+$(SKEL_DIR):
+	$(call msg,MKDIR,$@)
+	$(Q)mkdir -p $@
 
 # tests
 TEST := sberf_test

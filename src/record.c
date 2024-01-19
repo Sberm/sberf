@@ -17,8 +17,6 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#include "vmlinux.h"
-
 #include <signal.h>
 #include <stdio.h>
 #include <time.h>
@@ -49,7 +47,7 @@ static void sig_handler(int sig)
 	exiting = 1;
 }
 
-static int handle_event(void *ctx, void *data, size_t data_sz)
+static int handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
 	const struct event *e = data;
 	struct tm *tm;
@@ -88,7 +86,7 @@ int cmd_record(int argc, char **argv)
 	signal(SIGTERM, sig_handler);
 
 	/* Load and verify BPF application */
-	skel = bootstrap_bpf__open();
+	skel = record_bpf__open();
 	if (!skel) {
 		fprintf(stderr, "Failed to open and load BPF skeleton\n");
 		return 1;
@@ -98,21 +96,21 @@ int cmd_record(int argc, char **argv)
 	skel->rodata->min_duration_ns = env.min_duration_ms * 1000000ULL;
 
 	/* Load & verify BPF programs */
-	err = bootstrap_bpf__load(skel);
+	err = record_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
 	}
 
 	/* Attach tracepoints */
-	err = bootstrap_bpf__attach(skel);
+	err = record_bpf__attach(skel);
 	if (err) {
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
 		goto cleanup;
 	}
 
 	/* Set up perf buffer polling */
-	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), handle_event, NULL, NULL);
+	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), 8, handle_event, NULL, NULL, NULL);
 	if (!pb) {
 		err = -1;
 		fprintf(stderr, "Failed to create perf buffer\n");
@@ -123,7 +121,7 @@ int cmd_record(int argc, char **argv)
 	printf("%-8s %-5s %-16s %-7s %-7s %s\n", "TIME", "EVENT", "COMM", "PID", "PPID",
 	       "FILENAME/EXIT CODE");
 	while (!exiting) {
-		err = perf_buffer__poll(rb, 100 /* timeout, ms */);
+		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
 		/* Ctrl-C will cause -EINTR */
 		if (err == -EINTR) {
 			err = 0;
@@ -137,8 +135,8 @@ int cmd_record(int argc, char **argv)
 
 cleanup:
 	/* Clean up */
-	perf_buffer__free(rb);
-	bootstrap_bpf__destroy(skel);
+	perf_buffer__free(pb);
+	record_bpf__destroy(skel);
 
 	return err < 0 ? -err : 0;
 }
