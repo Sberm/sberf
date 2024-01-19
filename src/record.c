@@ -47,7 +47,7 @@ static void sig_handler(int sig)
 	exiting = 1;
 }
 
-static int handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
+static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
 	const struct event *e = data;
 	struct tm *tm;
@@ -68,8 +68,6 @@ static int handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 		printf("%-8s %-5s %-16s %-7d %-7d %s\n", ts, "EXEC", e->comm, e->pid, e->ppid,
 		       e->filename);
 	}
-
-	return 0;
 }
 
 int cmd_record(int argc, char **argv)

@@ -60,25 +60,13 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	bpf_map_update_elem(&exec_start, &pid, &empty_event, BPF_NOEXIST);
 
 	e = bpf_map_lookup_elem(&exec_start, &pid);
+
+	bpf_printk("[EXEC]PID: %d", pid);
+
 	if (!e) {
-		bpf_printk("[FUCK]event doesn't exist\n");
+		bpf_printk("[DEBUG]event doesn't exist");
 		return 0;
 	}
-
-
-
-	/*bpf_map_update_elem(&exec_start, &pid, &ts, BPF_ANY);*/
-
-	/* don't emit exec events when minimum duration is specified */
-	/*if (min_duration_ns)*/
-		/*return 0;*/
-
-	/* reserve sample from BPF ringbuf */
-	/*e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);*/
-	/*if (!e)*/
-		/*return 0;*/
-
-	
 
 	/* fill out the sample with data */
 	task = (struct task_struct *)bpf_get_current_task();
@@ -96,7 +84,8 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 }
 
 SEC("tp/sched/sched_process_exit")
-int handle_exit(struct trace_event_raw_sched_process_template *ctx)
+/*int handle_exit(struct trace_event_raw_sched_process_template *ctx)*/
+int handle_exit(struct trace_event_raw_sys_exit *ctx)
 {
 	struct task_struct *task;
 	struct event *e;
@@ -118,12 +107,17 @@ int handle_exit(struct trace_event_raw_sched_process_template *ctx)
 		duration_ns = bpf_ktime_get_ns() - e->ts;
 	else if (min_duration_ns)
 		return 0;
-	bpf_map_delete_elem(&exec_start, &pid);
+	else
+		return 0;
+
+	bpf_printk("[EXIT] %d",pid);
+
+	if (e)
+		bpf_printk("有了有了\n");
 
 	/* if process didn't live long enough, return early */
 	if (min_duration_ns && duration_ns < min_duration_ns)
 		return 0;
-
 
 	/* fill out the sample with data */
 	task = (struct task_struct *)bpf_get_current_task();
@@ -135,7 +129,12 @@ int handle_exit(struct trace_event_raw_sched_process_template *ctx)
 	e->exit_code = (BPF_CORE_READ(task, exit_code) >> 8) & 0xff;
 	bpf_get_current_comm(&e->comm, sizeof(e->comm));
 
-	bpf_ringbuf_submit(e, 0);
+	bpf_perf_event_output(ctx, &pb, BPF_F_CURRENT_CPU, e, sizeof(e));
+
+cleanup:
+
+	bpf_map_delete_elem(&exec_start, &pid);
 	return 0;
+	/*bpf_ringbuf_submit(e, 0);*/
 }
 

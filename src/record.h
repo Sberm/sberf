@@ -28,7 +28,7 @@ struct event {
 	int ppid;
 	unsigned long long ts;
 	unsigned exit_code;
-	unsigned long long duration_ns;
+	long long unsigned int duration_ns;
 	char comm[TASK_COMM_LEN];
 	char filename[MAX_FILENAME_LEN];
 	int exit_event;

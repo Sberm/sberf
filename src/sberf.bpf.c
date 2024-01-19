@@ -21,8 +21,6 @@
 #include <linux/bpf_common.h>
 #include <bpf/bpf_helpers.h>
 
-#include "record.h"
-
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 int my_pid = 0;
