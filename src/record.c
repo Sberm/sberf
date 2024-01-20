@@ -80,7 +80,7 @@ int cmd_record(int argc, char **argv)
 {
 	if (argc < 3 || !atoi(argv[2])) {
 		char prompt[] = "\n  Usage:\n"
-						"\n    sberf record <PID>\n\n";
+		                "\n    sberf record <PID>\n\n";
 		printf("%s", prompt);
 		return 0;
 	}
