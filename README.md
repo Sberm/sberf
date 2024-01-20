@@ -48,5 +48,5 @@ make
 #
 # bpf.c --> bpf.tmp.o --> bpf.o --> skel.h
 #                                      \_ .c -> .o
-#                                 	             \_ sberf
+#                                                \_ sberf
 ```

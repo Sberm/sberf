@@ -34,7 +34,7 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 #
 # bpf.c --> bpf.tmp.o --> bpf.o --> skel.h
 #                                      \_ .c -> .o
-#                                 	             \_ sberf
+#                                                \_ sberf
 
 # bpf.c文件
 BPF_FILE := record.bpf.c
