@@ -22,6 +22,7 @@
 #include <time.h>
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
+#include <stdlib.h>
 
 #include "sub_commands.h"
 #include "util.h"
@@ -70,8 +71,20 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	}
 }
 
+static void handle_lost_events(void *ctx, int cpu, __u64 lost_cnt)
+{
+	fprintf(stderr, "Lost %llu events on CPU #%d!\n", lost_cnt, cpu);
+}
+
 int cmd_record(int argc, char **argv)
 {
+	if (argc < 3 || !atoi(argv[2])) {
+		char prompt[] = "\n  Usage:\n"
+						"\n    sberf record <PID>\n\n";
+		printf("%s", prompt);
+		return 0;
+	}
+
 	struct perf_buffer *pb = NULL;
 	struct record_bpf *skel;
 	int err;
@@ -89,6 +102,9 @@ int cmd_record(int argc, char **argv)
 		fprintf(stderr, "Failed to open and load BPF skeleton\n");
 		return 1;
 	}
+
+	/* Tell eBPF which PID to trace */
+	skel->bss->pid_to_trace = atoi(argv[2]);
 
 	/* Parameterize BPF code with minimum duration parameter */
 	skel->rodata->min_duration_ns = env.min_duration_ms * 1000000ULL;
@@ -108,7 +124,7 @@ int cmd_record(int argc, char **argv)
 	}
 
 	/* Set up perf buffer polling */
-	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), 8, handle_event, NULL, NULL, NULL);
+	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), 8, handle_event, handle_lost_events, NULL, NULL);
 	if (!pb) {
 		err = -1;
 		fprintf(stderr, "Failed to create perf buffer\n");
@@ -118,6 +134,7 @@ int cmd_record(int argc, char **argv)
 	/* Process events */
 	printf("%-8s %-5s %-16s %-7s %-7s %s\n", "TIME", "EVENT", "COMM", "PID", "PPID",
 	       "FILENAME/EXIT CODE");
+
 	while (!exiting) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
 		/* Ctrl-C will cause -EINTR */

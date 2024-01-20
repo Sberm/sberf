@@ -36,9 +36,8 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 #                                      \_ .c -> .o
 #                                 	             \_ sberf
 
-
 # bpf.c文件
-BPF_FILE := sberf.bpf.c record.bpf.c
+BPF_FILE := record.bpf.c
 SKEL := $(patsubst %.bpf.c, %.skel.h,$(BPF_FILE))
 SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 
@@ -49,15 +48,13 @@ OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
 INCLUDE := -Ivmlinux -Isrc -I/usr/include
 
 # bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
+# llvm-strip去除tmp.bpf.o中的DWARF信息
+# bpftool生成bpf.o
 $(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard %.h) $(VMLINUX) | $(SKEL_DIR)
 	$(call msg,BPF,$@)
-	# CLANG生成tmp.bpf.o
-	# -I.是为了include vmlinux.h
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
 		-Ivmlinux -c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
-	# llvm-strip去除tmp.bpf.o中的DWARF信息
 	$(Q)$(LLVM_STRIP) -g $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
-	# bpftool生成bpf.o
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # bpf.o --BPFTOOL--> .skel.h
@@ -67,7 +64,6 @@ $(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
 # .c --GCC--> .o
-# $(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) | $(OUTPUT) $(SKEL_DIR)
 $(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) | $(OUTPUT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
@@ -82,7 +78,6 @@ all: $(SBERF)
 # all obj file will be stored in build directory
 $(OUTPUT):
 	$(call msg,MKDIR,$@)
-	@printf '%s\n' "$(OBJS_BUILT)"
 	$(Q)mkdir -p $@
 
 $(SKEL_DIR):

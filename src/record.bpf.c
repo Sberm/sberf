@@ -27,6 +27,8 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
+pid_t pid_to_trace;
+
 static const struct event empty_event = {};
 
 struct {
@@ -45,7 +47,7 @@ struct {
 const volatile unsigned long long min_duration_ns = -1;
 
 SEC("tp/sched/sched_process_exec")
-int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
+int handle_exec(struct trace_event_raw_sys_enter *ctx)
 {
 	struct task_struct *task;
 	unsigned fname_off;
@@ -57,14 +59,14 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	pid = bpf_get_current_pid_tgid() >> 32;
 	ts = bpf_ktime_get_ns();
 
-	bpf_map_update_elem(&exec_start, &pid, &empty_event, BPF_NOEXIST);
+	bpf_printk("[EXEC] %d", pid);
+
+	if (bpf_map_update_elem(&exec_start, &pid, &empty_event, BPF_NOEXIST)) {
+		return 0;
+	}
 
 	e = bpf_map_lookup_elem(&exec_start, &pid);
-
-	bpf_printk("[EXEC]PID: %d", pid);
-
 	if (!e) {
-		bpf_printk("[DEBUG]event doesn't exist");
 		return 0;
 	}
 
@@ -77,14 +79,14 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	e->ts = ts;
 	bpf_get_current_comm(&e->comm, sizeof(e->comm));
 
-	fname_off = ctx->__data_loc_filename & 0xFFFF;
-	bpf_probe_read_str(&e->filename, sizeof(e->filename), (void *)ctx + fname_off);
+	bpf_printk("ppid %d ts %llu comm %s", e->ppid, e->ts, e->comm);
+
+	bpf_perf_event_output(ctx, &pb, BPF_F_CURRENT_CPU, e, sizeof(*e));
 
 	return 0;
 }
 
 SEC("tp/sched/sched_process_exit")
-/*int handle_exit(struct trace_event_raw_sched_process_template *ctx)*/
 int handle_exit(struct trace_event_raw_sys_exit *ctx)
 {
 	struct task_struct *task;
@@ -101,19 +103,17 @@ int handle_exit(struct trace_event_raw_sys_exit *ctx)
 	if (pid != tid)
 		return 0;
 
+	bpf_printk("[EXIT] %d",pid);
+
 	/* if we recorded start of the process, calculate lifetime duration */
 	e = bpf_map_lookup_elem(&exec_start, &pid);
+
 	if (e)
 		duration_ns = bpf_ktime_get_ns() - e->ts;
 	else if (min_duration_ns)
 		return 0;
 	else
 		return 0;
-
-	bpf_printk("[EXIT] %d",pid);
-
-	if (e)
-		bpf_printk("有了有了\n");
 
 	/* if process didn't live long enough, return early */
 	if (min_duration_ns && duration_ns < min_duration_ns)
@@ -129,7 +129,9 @@ int handle_exit(struct trace_event_raw_sys_exit *ctx)
 	e->exit_code = (BPF_CORE_READ(task, exit_code) >> 8) & 0xff;
 	bpf_get_current_comm(&e->comm, sizeof(e->comm));
 
-	bpf_perf_event_output(ctx, &pb, BPF_F_CURRENT_CPU, e, sizeof(e));
+	bpf_printk("ON EXIT: exit_event %d duration %llu comm %s", e->exit_event, e->duration_ns, e->comm);
+
+	bpf_perf_event_output(ctx, &pb, BPF_F_CURRENT_CPU, e, sizeof(*e));
 
 cleanup:
 
