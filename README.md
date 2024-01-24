@@ -6,6 +6,11 @@ Profiling/tracing/visualizing tool based on eBPF
 1. 安装[bpftool](https://github.com/libbpf/bpftool)
 
 2. 安装[libbpf](https://github.com/libbpf/libbpf)
+```bash
+git clone https://github.com/libbpf/libbpf.git
+make
+make install
+```
 
 3. 安装Clang
 
@@ -17,7 +22,7 @@ sudo apt-get install clang
 sudo yum install clang
 ```
 
-4. 编译
+4. make编译
 
 ```
 # 打印调试信息
@@ -25,6 +30,13 @@ DEBUG=1 make
 
 # 无信息
 make
+```
+
+5. 使用
+
+```bash
+sberf record <PID>
+sberf plot <REC>
 ```
 
 #### 文件组成
