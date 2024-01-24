@@ -5,9 +5,18 @@ Profiling/tracing/visualizing tool based on eBPF
 
 1. 安装[bpftool](https://github.com/libbpf/bpftool)
 
+```bash
+git clone https://github.com/libbpf/bpftool.git
+cd src
+make
+make install
+```
+
 2. 安装[libbpf](https://github.com/libbpf/libbpf)
+
 ```bash
 git clone https://github.com/libbpf/libbpf.git
+cd src
 make
 make install
 ```
