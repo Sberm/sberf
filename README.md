@@ -44,8 +44,8 @@ make
 5. 使用
 
 ```bash
-sberf record <PID>
-sberf plot <REC>
+sudo ./sberf record <PID>
+sudo ./sberf plot <REC>
 ```
 
 #### 文件组成
