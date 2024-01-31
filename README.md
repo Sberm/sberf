@@ -50,7 +50,7 @@ sberf plot <REC>
 
 #### 文件组成
 
-`src`中存放`bpf.c`文件，用于加载到eBPF虚拟机上运行。
+`bpf.c`文件，用于加载到eBPF虚拟机上运行。
 
 `.c`常规c文件。
 

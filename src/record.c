@@ -137,7 +137,6 @@ int cmd_record(int argc, char **argv)
 
 	while (!exiting) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
-		/* Ctrl-C will cause -EINTR */
 		if (err == -EINTR) {
 			err = 0;
 			break;
