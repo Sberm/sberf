@@ -44,6 +44,7 @@ make
 5. 使用
 
 ```bash
+# 必须使用sudo运行
 sudo ./sberf record <PID>
 sudo ./sberf plot <REC>
 ```
