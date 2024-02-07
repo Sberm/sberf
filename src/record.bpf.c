@@ -17,8 +17,6 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
-/* Copyright (c) 2022 Meta Platforms, Inc. */
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
@@ -28,6 +26,8 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
+pid_t pid_to_trace;
+
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 256 * 1024);
@@ -36,7 +36,7 @@ struct {
 SEC("perf_event")
 int profile(void *ctx)
 {
-	int pid = bpf_get_current_pid_tgid() >> 32;
+	/*int pid = bpf_get_current_pid_tgid() >> 32;*/
 	int cpu_id = bpf_get_smp_processor_id();
 	struct stacktrace_event *event;
 	int cp;
@@ -45,7 +45,7 @@ int profile(void *ctx)
 	if (!event)
 		return 1;
 
-	event->pid = pid;
+	event->pid = pid_to_trace;
 	event->cpu_id = cpu_id;
 
 	if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
