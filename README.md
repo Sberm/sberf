@@ -51,13 +51,9 @@ sudo ./sberf plot <REC>
 
 #### 文件组成
 
-`bpf.c`文件，用于加载到eBPF虚拟机上运行。
+`bpf.c` eBPF虚拟机上运行的程序
 
-`.c`常规c文件。
-
-`.h`常规c文件的头文件。
-
-`Makefile` gnu-make的配置文件。
+`.c` 常规c文件
 
 #### Makefile编译逻辑
 
