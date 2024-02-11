@@ -28,35 +28,66 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 pid_t pid_to_trace;
 
+/*struct {*/
+	/*__uint(type, BPF_MAP_TYPE_RINGBUF);*/
+	/*__uint(max_entries, 256 * 1024);*/
+/*} events SEC(".maps");*/
+
+static const struct event empty_event = {};
+
 struct {
-	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024);
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 8192);
+    __type(key, pid_t);
+    __type(value, struct event); // u64定义在vmlinux.h中
 } events SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+	__uint(key_size, sizeof(u32));
+	__uint(value_size, sizeof(u32));
+} pb SEC(".maps");
 
 SEC("perf_event")
 int profile(void *ctx)
 {
+	bpf_printk("ok this is tracing");
+
+	int pid = bpf_get_current_pid_tgid() >> 32;
+	if (pid != pid_to_trace)
+		return 0;
+
+	bpf_printk("ok this is tracing");
+
 	/*int pid = bpf_get_current_pid_tgid() >> 32;*/
 	int cpu_id = bpf_get_smp_processor_id();
-	struct stacktrace_event *event;
+	struct event *e = NULL;
 	int cp;
 
-	event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
-	if (!event)
+	/*event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);*/
+	if (bpf_map_update_elem(&events, &pid, &empty_event, BPF_ANY)) {
+		bpf_printk("Failed to create event");
+		return 0;
+	}
+
+	e = bpf_map_lookup_elem(&events, &pid_to_trace);
+
+	if (!e)
 		return 1;
 
-	event->pid = pid_to_trace;
-	event->cpu_id = cpu_id;
+	e->pid = pid_to_trace;
+	e->cpu_id = cpu_id;
 
-	if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
-		event->comm[0] = 0;
+	if (bpf_get_current_comm(e->comm, sizeof(e->comm)))
+		e->comm[0] = 0;
 
-	event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
+	e->kstack_sz = bpf_get_stack(ctx, e->kstack, sizeof(e->kstack), 0);
 
-	event->ustack_sz =
-		bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
+	e->ustack_sz =
+		bpf_get_stack(ctx, e->ustack, sizeof(e->ustack), BPF_F_USER_STACK);
 
-	bpf_ringbuf_submit(event, 0);
+	/*bpf_ringbuf_submit(e, 0);*/
+	bpf_perf_event_output(ctx, &pb, BPF_F_CURRENT_CPU, e, sizeof(*e));
 
 	return 0;
 }
