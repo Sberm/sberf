@@ -81,7 +81,7 @@ int cmd_record(int argc, char **argv)
 		goto cleanup;
 	}
 
-	printf("start profiling\n");
+	printf("start profiling...\n");
 
 	while (true) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
