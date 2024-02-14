@@ -23,6 +23,10 @@
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
 #include <stdlib.h>
+#include <linux/perf_event.h>
+#include <linux/hw_breakpoint.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include "sub_commands.h"
 #include "util.h"
@@ -57,7 +61,26 @@ int cmd_record(int argc, char **argv)
 	}
 
 	/* Tell eBPF which PID to trace */
-	skel->bss->pid_to_trace = atoi(argv[2]);
+	int pid_to_trace = atoi(argv[2]);
+	skel->bss->pid_to_trace = pid_to_trace;
+
+	int freq = 1;
+	int sample_freq = 49;
+
+	struct perf_event_attr attr = {
+		.type = PERF_TYPE_SOFTWARE,
+		.freq = freq,
+		.sample_freq = sample_freq,
+		.config = PERF_COUNT_SW_CPU_CLOCK
+	};
+
+	int cpu_num = 0;
+
+	int fd = syscall(__NR_perf_event_open, &attr, pid_to_trace, cpu_num, -1, 0);
+	if (fd < 0) {
+		printf("failed to open perf event\n");
+		return -1;
+	}
 
 	/* Load & verify BPF programs */
 	err = record_bpf__load(skel);
@@ -81,7 +104,7 @@ int cmd_record(int argc, char **argv)
 		goto cleanup;
 	}
 
-	printf("start profiling...\n");
+	printf("start profiling pid %d...\n", pid_to_trace);
 
 	while (true) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
@@ -100,6 +123,7 @@ cleanup:
 	/* Clean up */
 	perf_buffer__free(pb);
 	record_bpf__destroy(skel);
+	close(fd);
 
 	return 0;
 }

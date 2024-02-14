@@ -49,7 +49,7 @@ struct {
 } pb SEC(".maps");
 
 SEC("perf_event")
-int profile(void *ctx)
+int profile(struct bpf_perf_event_data *ctx)
 {
 	bpf_printk("ok this is tracing");
 
