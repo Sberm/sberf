@@ -24,7 +24,6 @@
 #include <bpf/libbpf.h>
 #include <stdlib.h>
 #include <linux/perf_event.h>
-#include <linux/hw_breakpoint.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -71,22 +70,27 @@ int cmd_record(int argc, char **argv)
 		.type = PERF_TYPE_SOFTWARE,
 		.freq = freq,
 		.sample_freq = sample_freq,
-		.config = PERF_COUNT_SW_CPU_CLOCK
 	};
 
+	int cpus = libbpf_num_possible_cpus();
+	printf("how many cpus: %d\n", cpus);
 	int cpu_num = 0;
-
-	int fd = syscall(__NR_perf_event_open, &attr, pid_to_trace, cpu_num, -1, 0);
-	if (fd < 0) {
-		printf("failed to open perf event\n");
-		return -1;
-	}
+	int fd;
 
 	/* Load & verify BPF programs */
 	err = record_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
+	}
+
+	for (int i = 0; i < cpus; i++) {
+		fd = syscall(SYS_perf_event_open, &attr, pid_to_trace, cpu_num, -1, 0);
+		if (fd < 0) {
+			printf("failed to open perf event for cpu %d\n", i);
+			close(fd);
+		}
+		bpf_program__attach_perf_event(skel->progs.profile, fd);
 	}
 
 	/* Attach tracepoints */
@@ -104,7 +108,7 @@ int cmd_record(int argc, char **argv)
 		goto cleanup;
 	}
 
-	printf("start profiling pid %d...\n", pid_to_trace);
+	printf("start recording pid %d...\n", pid_to_trace);
 
 	while (true) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
@@ -123,7 +127,6 @@ cleanup:
 	/* Clean up */
 	perf_buffer__free(pb);
 	record_bpf__destroy(skel);
-	close(fd);
 
 	return 0;
 }
