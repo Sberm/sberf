@@ -108,7 +108,7 @@ int cmd_record(int argc, char **argv)
 		goto cleanup;
 	}
 
-	printf("start recording pid %d...\n", pid_to_trace);
+	printf("Start recording from pid: %d...\n", pid_to_trace);
 
 	while (true) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);

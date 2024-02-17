@@ -51,7 +51,7 @@ sudo ./sberf plot <REC>
 
 #### 文件组成
 
-`bpf.c` eBPF虚拟机上运行的程序
+`bpf.c` BPF虚拟机上运行的程序
 
 `.c` 常规c文件
 
