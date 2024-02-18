@@ -3,7 +3,7 @@ Profiling/tracing/visualizing tool based on eBPF
 
 #### Compilation
 
-1. Install[bpftool](https://github.com/libbpf/bpftool)
+1. Install [bpftool](https://github.com/libbpf/bpftool)
 
 ```bash
 git clone https://github.com/libbpf/bpftool.git
@@ -12,7 +12,7 @@ make
 make install
 ```
 
-2. Install[libbpf](https://github.com/libbpf/libbpf)
+2. Install [libbpf](https://github.com/libbpf/libbpf)
 
 ```bash
 git clone https://github.com/libbpf/libbpf.git
@@ -49,7 +49,7 @@ sudo ./sberf record <PID>
 sudo ./sberf plot <REC>
 ```
 
-#### Files & their roles
+#### Files & their uses
 
 `bpf.c` Programs that run on eBPF virtual machine
 
