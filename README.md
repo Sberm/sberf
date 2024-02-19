@@ -34,7 +34,7 @@ sudo yum install clang
 4. Compile with GNU-Make
 
 ```
-# verbose 
+# verbose message
 DEBUG=1 make
 
 # mute
