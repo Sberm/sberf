@@ -46,7 +46,7 @@ struct {
 SEC("perf_event")
 int profile(struct bpf_perf_event_data *ctx)
 {
-	bpf_printk("perf e");
+	bpf_printk("perf event");
 
 	// TODO: has to be the same pid?
 	int pid = bpf_get_current_pid_tgid() >> 32;

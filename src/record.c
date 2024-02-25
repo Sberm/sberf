@@ -93,6 +93,8 @@ int cmd_record(int argc, char **argv)
 		goto cleanup;
 	}
 
+	printf("Start recording, pid: %d...\n", pid_to_trace);
+
 	for (int i = 0; i < cpus; i++) {
 		fd = syscall(SYS_perf_event_open, &attr, pid_to_trace, cpu_num, -1, 0);
 		if (fd < 0) {
@@ -116,8 +118,6 @@ int cmd_record(int argc, char **argv)
 		fprintf(stderr, "Failed to create perf buffer\n");
 		goto cleanup;
 	}
-
-	printf("Start recording, pid: %d...\n", pid_to_trace);
 
 	while (true) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
