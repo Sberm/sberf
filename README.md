@@ -1,5 +1,6 @@
-<img width="200" src="images/sberf-transparent.png" />
-<img width="200" src="images/sberf-title.png" />
+<div>
+<img width="200" src="images/sberf-transparent.png" /><img width="200" src="images/sberf-title.png" />
+</div>
 
 [![website][s1]][l1] [![version][s2]][l2]
 
