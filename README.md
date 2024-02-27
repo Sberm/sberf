@@ -1,4 +1,4 @@
-![sberf-thumbnail](/images/sberf-transparent.png)
+<h1 align="center"><img width="440" src="images/sberf-transparent.png" /></h1>
 
 [![website][s1]][l1] [![version][s2]][l2]
 
@@ -73,8 +73,8 @@ sudo ./sberf plot <REC>
 #                                                \_ sberf
 ```
 
-[s1]: https://img.shields.io/badge/website-official 
-[l1]: sberm.cn/sberf
+[s1]: https://img.shields.io/badge/website-official-F6DC51
+[l1]: https://sberm.cn/sberf
 
-[s2]: https://img.shields.io/badge/version-v0.0.1
-[l2]: sberm.cn/sberf
+[s2]: https://img.shields.io/badge/version-v0.0.1-green
+[l2]: https://sberm.cn/sberf
