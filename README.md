@@ -1,7 +1,6 @@
 ![sberf-thumbnail](/images/sberf-transparent.png)
 
-[![offical-website][s1]][l1]
-[![version][s2]][l2]
+[![website][s1]][l1] [![version][s2]][l2]
 
 ## Sberf
 Profiling/tracing/visualizing tool based on eBPF
