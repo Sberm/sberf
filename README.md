@@ -1,5 +1,8 @@
 ![sberf-thumbnail](/images/sberf-transparent.png)
 
+[![offical-website][s1]][l1]
+[![version][s2]][l2]
+
 ## Sberf
 Profiling/tracing/visualizing tool based on eBPF
 
@@ -70,3 +73,9 @@ sudo ./sberf plot <REC>
 #                                      \_ .c -> .o
 #                                                \_ sberf
 ```
+
+[s1]: https://img.shields.io/badge/website-official 
+[l1]: sberm.cn/sberf
+
+[s2]: https://img.shields.io/badge/version-v0.0.1
+[l2]: sberm.cn/sberf
