@@ -73,7 +73,7 @@ sudo ./sberf plot <REC>
 #                                                \_ sberf
 ```
 
-[s1]: https://img.shields.io/badge/website-official-F6DC51
+[s1]: https://img.shields.io/badge/website-official-FFDB1A
 [l1]: https://sberm.cn/sberf
 
 [s2]: https://img.shields.io/badge/version-v0.0.1-green
