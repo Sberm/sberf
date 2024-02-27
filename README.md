@@ -1,4 +1,4 @@
-<h1 align="center"><img width="440" src="images/sberf-transparent.png" /></h1>
+<h1 align="center"><img width="125" src="images/sberf-transparent.png" /></h1>
 
 [![website][s1]][l1] [![version][s2]][l2]
 
