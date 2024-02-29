@@ -2,7 +2,7 @@
 <img width="200" src="images/sberf-transparent.png" /><img width="200" src="images/sberf-title.png" />
 </div>
 
-[![website][s1]][l1] [![version][s2]][l2] [![build][s3]][l3]
+[![website][s1]][l1]   [![version][s2]][l2]   [![build][s3]][l3]
 
 ## Sberf
 Profiling/tracing/visualizing tool based on eBPF
