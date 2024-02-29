@@ -37,9 +37,15 @@ sudo apt-get install clang
 sudo yum install clang
 ```
 
-4. Compile with GNU-Make
+4. Clone this repo
 
+```bash
+git clone https://github.com/Sberm/Sberf.c.git
 ```
+
+5. Make
+
+```bash
 # verbose message
 DEBUG=1 make
 
