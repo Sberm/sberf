@@ -47,7 +47,7 @@ DEBUG=1 make
 make
 ```
 
-5. Usage
+#### Usage
 
 ```bash
 # has to run with sudo
