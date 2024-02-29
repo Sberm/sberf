@@ -40,7 +40,7 @@ sudo yum install clang
 4. Clone this repo
 
 ```bash
-git clone https://github.com/Sberm/Sberf.c.git
+git clone https://github.com/Sberm/sberf.git
 ```
 
 5. Make
