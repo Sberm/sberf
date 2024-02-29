@@ -2,7 +2,7 @@
 <img width="200" src="images/sberf-transparent.png" /><img width="200" src="images/sberf-title.png" />
 </div>
 
-[![website][s1]][l1]   [![version][s2]][l2]   [![build][s3]][l3]
+[![docs][s1]][l1] [![website][s2]][l2] [![version][s3]][l3] 
 
 ## Sberf
 Profiling/tracing/visualizing tool based on eBPF
@@ -75,11 +75,11 @@ sudo ./sberf plot <REC>
 #                                                \_ sberf
 ```
 
-[s1]: https://img.shields.io/badge/website-official-FFDB1A
-[l1]: https://sberm.cn/sberf
+[s1]: https://img.shields.io/badge/docs-here-FFDB1A
+[l1]: https://sberm.cn/sberf/docs
 
-[s2]: https://img.shields.io/badge/version-v0.0.1-green
-[l2]: https://github.com/Sberm/Sberf.c/releases
+[s2]: https://img.shields.io/badge/website-official-blue
+[l2]: https://sberm.cn/sberf
 
-[s3]: https://img.shields.io/badge/build-success-blue
-[l3]: https://sberm.cn/sberf
+[s3]: https://img.shields.io/badge/version-v0.0.1-green
+[l3]: https://github.com/Sberm/Sberf.c/releases
