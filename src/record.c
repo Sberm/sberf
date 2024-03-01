@@ -38,7 +38,7 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	const struct event *e = data;
 	printf("user stack:\n");
 	for (int i = 0;i < e->ustack_sz; i++) {
-		printf("%016llx\n", e->ustack[i]);
+		printf("%016llx ", e->ustack[i]);
 	} 
 	printf("\n");
 	printf("kernel stack:\n");

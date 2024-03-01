@@ -46,27 +46,26 @@ struct {
 SEC("perf_event")
 int profile(struct bpf_perf_event_data *ctx)
 {
-	bpf_printk("perf event");
-
 	// TODO: has to be the same pid?
 	int pid = bpf_get_current_pid_tgid() >> 32;
 	if (pid != pid_to_trace)
 		return 0;
 
-	/*int pid = bpf_get_current_pid_tgid() >> 32;*/
 	int cpu_id = bpf_get_smp_processor_id();
 	struct event *e = NULL;
 	int cp;
 
 	if (bpf_map_update_elem(&events, &pid, &empty_event, BPF_ANY)) {
-		bpf_printk("Failed to create event");
+		bpf_printk("Failed to update create event");
 		return 0;
 	}
 
 	e = bpf_map_lookup_elem(&events, &pid_to_trace);
 
-	if (!e)
-		return 1;
+	if (!e) {
+		bpf_printk("Failed to retrieve event");
+		return 0;
+	}
 
 	e->pid = pid_to_trace;
 	e->cpu_id = cpu_id;
@@ -75,7 +74,6 @@ int profile(struct bpf_perf_event_data *ctx)
 		e->comm[0] = 0;
 
 	e->kstack_sz = bpf_get_stack(ctx, e->kstack, sizeof(e->kstack), 0);
-
 	e->ustack_sz = bpf_get_stack(ctx, e->ustack, sizeof(e->ustack), BPF_F_USER_STACK);
 
 	bpf_perf_event_output(ctx, &pb, BPF_F_CURRENT_CPU, e, sizeof(*e));

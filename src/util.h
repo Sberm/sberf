@@ -20,6 +20,8 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#define DE printf("[Debug]\n");
+
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
 
 #endif

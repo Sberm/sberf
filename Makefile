@@ -14,9 +14,9 @@ OUTPUT ?= build
 SKEL_DIR := build_bpf
 BPFTOOL := bpftool
 CLANG ?= clang
-BPF_LIB := libbpf.a
 LLVM_STRIP ?= llvm-strip
 VMLINUX ?= vmlinux/vmlinux.h
+LIBS ?= -l:libbpf.a -lelf -lz 
 
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 | sed 's/arm.*/arm/' \
@@ -71,7 +71,7 @@ $(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) | $(OUTPUT)
 # .o --GCC--> executable
 sberf: $(OBJS_BUILT)
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) $(INCLUDE) -l:$(BPF_LIB) -lelf -lz -o $@ 
+	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) $(INCLUDE) $(LIBS) -o $@ 
 
 all: $(SBERF)
 
