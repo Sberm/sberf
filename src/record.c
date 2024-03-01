@@ -35,6 +35,8 @@
 
 static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
+
+	// print stack frames
 	const struct event *e = data;
 	printf("user stack:\n");
 	for (int i = 0;i < e->ustack_sz; i++) {
@@ -61,14 +63,13 @@ int cmd_record(int argc, char **argv)
 	struct record_bpf *skel;
 	int err;
 
-	/* Load and verify BPF application */
 	skel = record_bpf__open();
 	if (!skel) {
 		fprintf(stderr, "Failed to open and load BPF skeleton\n");
 		return 1;
 	}
 
-	/* Tell eBPF which PID to trace */
+	// pid to trace
 	pid_t pid_to_trace = atoi(argv[2]);
 	skel->bss->pid_to_trace = pid_to_trace;
 
@@ -85,7 +86,6 @@ int cmd_record(int argc, char **argv)
 	int cpus = libbpf_num_possible_cpus();
 	int fd;
 
-	/* Load & verify BPF programs */
 	err = record_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
@@ -98,8 +98,9 @@ int cmd_record(int argc, char **argv)
 	fd = syscall(__NR_perf_event_open, &attr, pid_to_trace, -1, -1, PERF_FLAG_FD_CLOEXEC);
 	if (fd < 0) {
 		// meaning that cpu is idle
-		if (errno == ENODEV) {}
+		if (errno == ENODEV) {
 			// do something
+		}
 		printf("Failed to record pid %d\n", pid_to_trace);
 	}
 	int a_p_e =  bpf_program__attach_perf_event(skel->progs.profile, fd);
@@ -114,7 +115,7 @@ int cmd_record(int argc, char **argv)
 		goto cleanup;
 	}
 
-	/* Set up perf buffer polling */
+	// set up perf buffer polling
 	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), 8, handle_event, NULL, NULL, NULL);
 	if (!pb) {
 		err = -1;
@@ -124,7 +125,7 @@ int cmd_record(int argc, char **argv)
 
 	while (true) {
 		err = perf_buffer__poll(pb, 100);
-		/* Ctrl-C will cause -EINTR */
+		// Ctrl-C will cause -EINTR
 		if (err == -EINTR) {
 			err = 0;
 			break;
@@ -136,7 +137,6 @@ int cmd_record(int argc, char **argv)
 	}
 
 cleanup:
-	/* Clean up */
 	perf_buffer__free(pb);
 	record_bpf__destroy(skel);
 
