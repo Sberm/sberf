@@ -38,19 +38,19 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	const struct event *e = data;
 	printf("user stack:\n");
 	for (int i = 0;i < e->ustack_sz; i++) {
-		printf("%s", e->ustack[i]);
+		printf("%016llx\n", e->ustack[i]);
 	} 
 	printf("\n");
 	printf("kernel stack:\n");
 	for (int i = 0;i < e->kstack_sz; i++) {
-		printf("%s", e->kstack[i]);
+		printf("%016llx\n", e->kstack[i]);
 	}
 	printf("\n");
 }
 
 int cmd_record(int argc, char **argv)
 {
-	if (argc < 3 || !atoi(argv[2])) {
+	if (argc < 3) {
 		char prompt[] = "\n  Usage:\n"
 		                "\n    sberf record <PID>\n\n";
 		printf("%s", prompt);
@@ -69,21 +69,20 @@ int cmd_record(int argc, char **argv)
 	}
 
 	/* Tell eBPF which PID to trace */
-	int pid_to_trace = atoi(argv[2]);
+	pid_t pid_to_trace = atoi(argv[2]);
 	skel->bss->pid_to_trace = pid_to_trace;
 
-	int freq = 1;
-	int sample_freq = 49; 
+	unsigned long long freq = 1;
+	unsigned long long sample_freq = 49; 
 
 	struct perf_event_attr attr = {
 		.type = PERF_TYPE_SOFTWARE,
 		.freq = freq,
 		.sample_freq = sample_freq,
+		.config = PERF_COUNT_SW_CPU_CLOCK,
 	};
 
 	int cpus = libbpf_num_possible_cpus();
-	printf("how many cpus: %d\n", cpus);
-	int cpu_num = 0;
 	int fd;
 
 	/* Load & verify BPF programs */
@@ -93,16 +92,20 @@ int cmd_record(int argc, char **argv)
 		goto cleanup;
 	}
 
-	printf("Start recording, pid: %d...\n", pid_to_trace);
+	printf("Recording %llu\n", pid_to_trace);
 
-	for (int i = 0; i < cpus; i++) {
-		fd = syscall(SYS_perf_event_open, &attr, pid_to_trace, cpu_num, -1, 0);
-		if (fd < 0) {
-			printf("failed to open perf event for cpu %d\n", i);
-			close(fd);
-		}
-		/* Attach */
-		bpf_program__attach_perf_event(skel->progs.profile, fd);
+	// on any cpu
+	fd = syscall(__NR_perf_event_open, &attr, pid_to_trace, -1, -1, PERF_FLAG_FD_CLOEXEC);
+	if (fd < 0) {
+		// meaning that cpu is idle
+		if (errno == ENODEV) {}
+			// do something
+		printf("Failed to record pid %d\n", pid_to_trace);
+	}
+	int a_p_e =  bpf_program__attach_perf_event(skel->progs.profile, fd);
+	if (!a_p_e) {
+		printf("Failed to attach bpf program\n");
+		goto cleanup;
 	}
 
 	err = record_bpf__attach(skel);
@@ -120,7 +123,7 @@ int cmd_record(int argc, char **argv)
 	}
 
 	while (true) {
-		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
+		err = perf_buffer__poll(pb, 100);
 		/* Ctrl-C will cause -EINTR */
 		if (err == -EINTR) {
 			err = 0;
