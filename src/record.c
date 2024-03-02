@@ -75,6 +75,7 @@ int cmd_record(int argc, char **argv)
 
 	unsigned long long freq = 1;
 	unsigned long long sample_freq = 49; 
+	/*unsigned long long sample_freq = 3999; */
 
 	struct perf_event_attr attr = {
 		.type = PERF_TYPE_SOFTWARE,
