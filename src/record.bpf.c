@@ -1,7 +1,7 @@
 /*-*- coding:utf-8                                                          -*-│
-│vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
+│vi: set net ft=c ts=4 sts=4 sw=4 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2023 Howard Chu                                                    │
+│ Copyright 2024 Howard Chu                                                    │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -17,6 +17,10 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
+/*
+ * Based on profile from BCC by Brendan Gregg and others.
+ */
+
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
@@ -26,57 +30,56 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-pid_t pid_to_trace;
+// specific pid
+volatile bool spec_pid = false;
+volatile pid_t pid_to_trace[MAX_PID] = {0};
 
-static const struct event empty_event = {};
+// init value for insertion into map
+static const u64 zero;
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 8192);
-    __type(key, pid_t);
-    __type(value, struct event); // u64定义在vmlinux.h中
-} events SEC(".maps");
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, key_t);
+    __type(value, u64);
+} sample SEC(".maps");
 
 struct {
-	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-	__uint(key_size, sizeof(u32));
-	__uint(value_size, sizeof(u32));
-} pb SEC(".maps");
+	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
+	__uint(key, u32);
+} stack_map SEC(".maps");
+
 
 SEC("perf_event")
 int profile(struct bpf_perf_event_data *ctx)
 {
-	// TODO: has to be the same pid?
-	int pid = bpf_get_current_pid_tgid() >> 32;
-	if (pid != pid_to_trace)
-		return 0;
+	pid_t pid = bpf_get_current_pid_tgid() >> 32;
 
-	int cpu_id = bpf_get_smp_processor_id();
-	struct event *e = NULL;
-	int cp;
-
-	if (bpf_map_update_elem(&events, &pid, &empty_event, BPF_ANY)) {
-		bpf_printk("Failed to update create event");
-		return 0;
-	}
-
-	e = bpf_map_lookup_elem(&events, &pid_to_trace);
-
-	if (!e) {
-		bpf_printk("Failed to retrieve event");
+	// if to trace only specific pids
+	if (spec_pid) {
+		for (int i = 0;i < ARRAY_LEN(pid_to_trace); i++) {
+			if (pid_to_trace[i] == 0)
+				return 0;
+			if (pid_to_trace[i] == pid)
+				break;
+		}
 		return 0;
 	}
+	
+	struct key_t key = {}
 
-	e->pid = pid_to_trace;
-	e->cpu_id = cpu_id;
+	key_samp = bpf_map_lookup_insert(&key, &stack_map, &zero);
+	if (key_samp)
+		__sync_fetch_and_add(valp, 1);
+	else {
+		bpf_printk("Failed to look up stack sample");
+		return -1;
+	}
 
-	if (bpf_get_current_comm(e->comm, sizeof(e->comm)))
-		e->comm[0] = 0;
-
-	e->kstack_sz = bpf_get_stack(ctx, e->kstack, sizeof(e->kstack), 0);
-	e->ustack_sz = bpf_get_stack(ctx, e->ustack, sizeof(e->ustack), BPF_F_USER_STACK);
-
-	bpf_perf_event_output(ctx, &pb, BPF_F_CURRENT_CPU, e, sizeof(*e));
+	key.pid = pid;
+	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK)
+	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0)
+	bpf_get_current_comm(&key.comm, sizeof(key.comm));
 
 	return 0;
 }

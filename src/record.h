@@ -17,31 +17,21 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
+#include <bpf/libbpf.h>
+
 #ifndef RECORD_H
 #define RECORD_H
 
 #define TASK_COMM_LEN	 16
 #define MAX_FILENAME_LEN 127
 #define STACK_BUF_LEN 1024
+#define MAX_ENTRIES 8192
+#define MAX_PID 8192
 
-//struct event {
-	//int pid;
-	//int ppid;
-	//unsigned long long ts;
-	//unsigned exit_code;
-	//unsigned long long duration_ns;
-	//char comm[TASK_COMM_LEN];
-	//char filename[MAX_FILENAME_LEN];
-	//int exit_event;
-//};
-
-struct event {
-	int pid;
-	int cpu_id;
-	char ustack[STACK_BUF_LEN];
-	char kstack[STACK_BUF_LEN];
-	long ustack_sz;
-	long kstack_sz;
+struct key_t {
+	__u32 pid;
+	int user_stack_id;
+	int kern_stack_id;
 	char comm[TASK_COMM_LEN];
 };
 
