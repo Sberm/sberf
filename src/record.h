@@ -17,8 +17,6 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#include <bpf/libbpf.h>
-
 #ifndef RECORD_H
 #define RECORD_H
 

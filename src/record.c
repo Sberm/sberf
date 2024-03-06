@@ -32,7 +32,6 @@
 #include "record.skel.h"
 #include "record.h"
 
-
 static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
 
@@ -50,8 +49,13 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	printf("\n");
 }
 
+static void signalHandler(int signum)
+{
+}
+
 int cmd_record(int argc, char **argv)
 {
+	// TODO: stoi illegal
 	if (argc < 3) {
 		char prompt[] = "\n  Usage:\n"
 		                "\n    sberf record <PID>\n\n";
@@ -95,13 +99,9 @@ int cmd_record(int argc, char **argv)
 
 	printf("Recording %llu\n", pid_to_trace);
 
-	// on any cpu
+	/* open on any cpu */
 	fd = syscall(__NR_perf_event_open, &attr, pid_to_trace, -1, -1, PERF_FLAG_FD_CLOEXEC);
 	if (fd < 0) {
-		// meaning that cpu is idle
-		if (errno == ENODEV) {
-			// do something
-		}
 		printf("Failed to record pid %d\n", pid_to_trace);
 	}
 	int a_p_e =  bpf_program__attach_perf_event(skel->progs.profile, fd);
@@ -116,29 +116,15 @@ int cmd_record(int argc, char **argv)
 		goto cleanup;
 	}
 
-	// set up perf buffer polling
-	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), 8, handle_event, NULL, NULL, NULL);
-	if (!pb) {
-		err = -1;
-		fprintf(stderr, "Failed to create perf buffer\n");
-		goto cleanup;
-	}
+	/* consume sigint */
+	signal(SIGINT, signalHandler);
 
-	while (true) {
-		err = perf_buffer__poll(pb, 100);
-		// Ctrl-C will cause -EINTR
-		if (err == -EINTR) {
-			err = 0;
-			break;
-		}
-		if (err < 0) {
-			printf("Error polling perf buffer: %d\n", err);
-			break;
-		}
-	}
+	load_ksym(ksym);
+	load_usym(usym, pid_t pid);
+
+	print_stack();
 
 cleanup:
-	perf_buffer__free(pb);
 	record_bpf__destroy(skel);
 
 	return 0;

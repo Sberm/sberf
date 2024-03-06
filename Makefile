@@ -85,20 +85,25 @@ $(SKEL_DIR):
 	$(Q)mkdir -p $@
 
 # tests
-TEST := sberf_test
+TEST := tsb
 TESTDIR = test
-TEST_FILE := test.c
+TEST_OBJS := test.o 
+TEST_OBJS_FULL := $(addprefix $(TESTDIR)/,$(TEST_OBJS))
+TO_TEST := sym.h
 
 test: $(TEST)
 
-# one liner or one filer
-$(TEST): $(TESTDIR)/$(TEST_FILE)
+$(TESTDIR)/%.o: $(TESTDIR)/%.c $(SRCDIR)/$(TO_TEST)
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(TESTDIR)/$(TEST_FILE) -o $(TEST)
+	$(Q)$(CC) $(CFLAGS) $(INCLUDE) -c $(filter %.c,$^) -o $@
+
+$(TEST): $(TESTDIR)/$(TEST_OBJS)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) $(TEST_OBJS_FULL) -o $(TEST)
 
 clean-all:
 	$(call msg,CLEAN-ALL)
-	$(Q)rm -rf $(SKEL_DIR) $(OUTPUT) $(SBERF) $(TEST) $(TESTDIR)
+	$(Q)rm -rf $(SKEL_DIR) $(OUTPUT) $(SBERF) $(TEST)
 
 clean:
 	$(call msg,CLEAN)

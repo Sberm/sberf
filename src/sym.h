@@ -1,0 +1,457 @@
+/*-*- coding:utf-8                                                          -*-│
+│vi: set net ft=c ts=4 sts=4 sw=4 fenc=utf-8                                :vi│
+╞══════════════════════════════════════════════════════════════════════════════╡
+│ Copyright 2024 Howard Chu                                                    │
+│                                                                              │
+│ Permission to use, copy, modify, and/or distribute this software for         │
+│ any purpose with or without fee is hereby granted, provided that the         │
+│ above copyright notice and this permission notice appear in all copies.      │
+│                                                                              │
+│ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL                │
+│ WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED                │
+│ WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE             │
+│ AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL         │
+│ DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR        │
+│ PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER               │
+│ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
+│ PERFORMANCE OF THIS SOFTWARE.                                                │
+╚─────────────────────────────────────────────────────────────────────────────*/
+
+#ifndef SYM_H
+#define SYM_H
+
+#include <stdio.h>
+#include <elf.h>
+#include <string.h>
+#include <stdlib.h>
+#include "util.h"
+
+#define KSYM_PATH "/proc/kallsyms"
+
+struct ksym {
+	unsigned long long addr;
+	char name[128];
+}; 
+
+struct ksyms {
+	struct ksym* sym;
+	size_t length;
+};
+
+/* Unbelievably similar to ksym */
+struct dso_sym {
+	unsigned long long addr;
+	char name[128];
+}; 
+
+struct dso {
+	unsigned long long start_addr;
+	unsigned long long end_addr;
+	unsigned long offset;
+	char path[1024];
+	struct dso_sym *sym;
+	/* dso_sym's length */
+	size_t length;
+};
+
+struct usyms {
+	struct dso *dsos;
+	size_t length;
+};
+
+/* kernel and user symbol table(_tb) */
+struct ksyms *ksyms_tb;
+struct usyms *usyms_tb;
+
+void remove_space(char *s);
+int lines_of_file(FILE* fp);
+const struct ksyms* ksym_load();
+int ksym_init(struct ksyms* ksym_tb, const int length);
+int ksym_free(struct ksyms* ksym_tb);
+const struct usyms* usym_load(int pid);
+int usym_init(struct usyms* usym_tb);
+int usym_add(struct usyms *usym_tb, const char *path, 
+             const unsigned long long start_addr, const unsigned long long end_addr,
+			 const unsigned long offset);
+int usym_free(struct usyms *usym_tb);
+int dso_load(struct dso *dso_p);
+int dso_free(struct dso *dso_p);
+int elf_parse(FILE *fp, struct dso *dso_p);
+
+
+/* Definition */
+
+void remove_space(char *s)
+{
+	char *d = s;
+	do {
+		while (*d == ' ')
+			++d;
+	} while (*s++ = *d++);
+}
+
+int lines_of_file(FILE* fp)
+{
+	char c;
+	int cnt = 0;
+	for (c = getc(fp); c != EOF; c = getc(fp))
+		if (c == '\n')
+			++cnt;
+	rewind(fp);
+	return cnt;
+}
+
+int ksym_init(struct ksyms *ksym_tb, const int length)
+{
+	if (ksym_tb == NULL)
+		goto sym_init_cleanup;
+
+	ksym_tb->length = length;
+	ksym_tb->sym = malloc(sizeof(struct ksym) * length);
+	if (ksym_tb->sym != NULL)
+		return 0;
+
+sym_init_cleanup:
+	free(ksym_tb);
+	return -1;
+}
+
+const struct ksyms* ksym_load()
+{
+	FILE *fp = fopen(KSYM_PATH, "r");
+	int size = lines_of_file(fp);
+
+	struct ksyms* ksym_tb = malloc(sizeof(struct ksyms));
+	
+	int err = ksym_init(ksym_tb, size);
+	if (err) {
+		printf("Failed to allocate kernel symbol table of lines: %d\n", size);
+		goto ksym_load_cleanup;
+	}
+
+	int index = 0;
+	unsigned long long addr;
+	char c;
+	char name[256];
+
+	while (1) {
+		int ret = fscanf(fp, "%llx %c %s%*[^\n]\n", &addr, &c, name);
+		if (c == 'T' || c == 't') {
+			ksym_tb->sym[index].addr = addr;
+			strcpy(ksym_tb->sym[index].name, name);
+			++index;
+		}
+		if (ret == EOF)
+			break;
+		if (ret != 3) {
+			printf("Failed to read kernel symbol table\n");
+			goto ksym_load_cleanup;
+		}
+	}
+
+	fclose(fp);
+	return ksym_tb;
+
+ksym_load_cleanup:
+	fclose(fp);
+	ksym_free(ksym_tb);
+	ksym_tb = NULL;
+	return NULL;
+}
+
+int ksym_free(struct ksyms* ksym_tb)
+{
+	free(ksym_tb->sym);
+	ksym_tb->sym = NULL;
+	return 0;
+}
+
+int usym_init(struct usyms *usym_tb) 
+{
+	usym_tb->dsos = NULL;
+	usym_tb->length = 0;
+	if (usym_tb == NULL)
+		return -1;
+	return 0;
+}
+
+int usym_add(struct usyms *usym_tb, const char *path, 
+             const unsigned long long start_addr, const unsigned long long end_addr,
+			 const unsigned long offset)
+{
+	void *p = realloc(usym_tb->dsos, sizeof(struct dso) * (usym_tb->length + 1));
+	if (p == NULL) {
+		printf("Failed to reallocate userspace symbol table\n");
+		return -1;
+	}
+	usym_tb->dsos = p;
+
+	struct dso dso_ = {
+		.start_addr = start_addr,
+		.end_addr = end_addr,
+		.sym = NULL,
+		.length = 0,
+	};
+	usym_tb->dsos[usym_tb->length] = dso_;
+	struct dso *dso_p = &usym_tb->dsos[usym_tb->length];
+	++usym_tb->length;
+	/* copy the path after assignment */
+	strcpy(dso_p->path, path);
+
+	if (dso_load(dso_p)) {
+		printf("Failed to load dso %s\n", dso_p->path);
+		return -1;
+	}
+
+	return 0;
+}
+
+const struct usyms* usym_load(int pid)
+{
+	struct usyms *usym_tb = malloc(sizeof(struct usyms));
+	usym_init(usym_tb);
+
+	/* read maps of process to get all dso */
+	char maps_path[256];
+	sprintf(maps_path, "/proc/%d/maps", pid);
+	FILE* fp = fopen(maps_path, "r");
+
+	int index = 0;
+	unsigned long long start_addr, end_addr;
+	unsigned long offset;
+	char path[1024];
+	char last_path[1024] = {0};
+
+	while (1) {
+		int ret = fscanf(fp, "%llx-%llx %*s %x %*x:%*x %*u%[^\n]\n", &start_addr, &end_addr, &offset, path);
+		remove_space(path);
+		if (ret == EOF)
+			break;
+		if (offset == 0)
+			continue;
+		if (ret != 4) {
+			printf("Failed to read user maps\n");
+			goto usym_load_cleanup;
+		}
+		/* discard duplicated path */
+		if (strcmp(last_path, path) == 0) {
+			continue;
+		}
+		strcpy(last_path, path);
+		int err = usym_add(usym_tb, path, start_addr, end_addr, offset);
+		if (err) {
+			printf("Failed to read dso %s\n", path);
+			goto usym_load_cleanup;
+		}
+	}
+
+	fclose(fp);
+	return usym_tb;
+
+usym_load_cleanup:
+	fclose(fp);
+	usym_free(usym_tb);
+	free(usym_tb);
+	usym_tb = NULL;
+	return NULL;
+}
+
+int usym_free(struct usyms *usym_tb)
+{
+	for (size_t i = 0;i < usym_tb->length; i++) {
+		if (dso_free(&usym_tb->dsos[i])) {
+			printf("Failed to free userspace symbol table's dso\n");
+			exit(-1);
+		}
+	}
+	free(usym_tb->dsos);
+	usym_tb->dsos = NULL;
+	return 0;
+}
+
+int dso_load(struct dso *dso_p)
+{
+	printf("Loading symbol from: %s\n", dso_p->path);
+	FILE* fp = fopen(dso_p->path, "rb");
+	if (fp == NULL) {
+		printf("Failed to open file %s\n", dso_p->path);
+		return -1;
+	}
+	char ident[EI_NIDENT];
+	int rc = fread(ident, sizeof(ident), 1, fp);
+	int err = 0;
+	if (rc != 1) {
+		printf("Failed to read ident\n");
+		err = -1;
+		goto dso_load_cleanup;
+	}
+	if (ident[0] != 0x7f) {
+		printf("%s is not an ELF file\n", dso_p->path);
+		err = -1;
+		goto dso_load_cleanup;
+	}
+	/* rewind fp */
+	rc = fseek(fp, 0, SEEK_SET);
+	if (rc < 0) {
+		printf("Failed to rewind\n");
+		goto dso_load_cleanup;
+	}
+	if (ident[4] == ELFCLASS64) {
+		err = elf_parse(fp, dso_p);
+		if (err != 0) {
+			printf("Failed to parse elf file\n");
+		}
+	} else {
+		printf("32-bit ELF not supported\n");
+		err = -1;
+	}
+
+dso_load_cleanup:
+	fclose(fp);
+	return err;
+}
+
+/*
+ * Only need to free dso's sym
+ */
+int dso_free(struct dso *dso_p)
+{
+	free(dso_p->sym);
+	dso_p->sym = NULL;
+	return 0;
+}
+
+int elf_parse(FILE *fp, struct dso *dso_p)
+{
+	Elf64_Ehdr ehdr;
+	int rc = fread(&ehdr, sizeof(ehdr), 1, fp);
+	int err = 0;
+	if (rc != 1) {
+		printf("Failed to read elf header\n");
+		err = -1;
+		goto elf_parse_err;
+	}
+
+	int num = ehdr.e_phnum;
+	int sz = ehdr.e_phentsize;
+	unsigned long long offset = ehdr.e_phoff, p_vaddr, p_size;
+	Elf64_Phdr phdr;
+	int i;
+	for (i = 0;i < num; i++) {
+		if (fseek(fp, offset, SEEK_SET)) {
+			printf("Failed to seek\n");
+			err = -1;
+			goto elf_parse_err;
+		}
+		if (fread(&phdr, sizeof(phdr), 1, fp) != 1) {
+			printf("Failed to read program header\n");
+			err = -1;
+			goto elf_parse_err;
+		}
+		if (phdr.p_flags & PF_X) {
+			if (phdr.p_offset == dso_p->offset) {
+                p_vaddr = phdr.p_vaddr;
+                p_size = phdr.p_memsz; 
+				if (p_size == 0) 
+					p_size = 0xffffffff;
+                break;
+            }
+		}
+		offset += sz;
+	}
+
+	if (i >= num) {
+		printf("No program headers\n");
+		err = -1;
+		goto elf_parse_err;
+	}
+
+	num = ehdr.e_shnum;
+	sz = ehdr.e_shentsize;
+	offset = ehdr.e_shoff;
+	Elf64_Shdr shdr;
+	Elf64_Shdr* headers = malloc(num * sizeof(Elf64_Shdr));
+
+	for (int i = 0;i < num;i++) {
+		if (fseek(fp, offset, SEEK_SET) < 0) {
+			printf("Failed to seek\n");
+			err = -1;
+			goto elf_parse_cleanup;
+		}
+		if (fread(&shdr, sizeof(shdr), 1, fp) != 1) {
+			printf("Failed to read section header\n");
+			err = -1;
+			goto elf_parse_cleanup;
+		}
+		headers[i] = shdr;
+		offset += sz;
+	}
+
+	Elf64_Sym symb;
+ 	unsigned long long faddr, fsize;
+    unsigned long long size, item_size;
+
+	int link, flink, ix;
+
+	char fname[128];
+	for (int i = 0;i < num;i++) {
+		switch(headers[i].sh_type) {
+			case SHT_SYMTAB:
+			case SHT_DYNSYM:
+				offset = headers[i].sh_offset;
+				size = headers[i].sh_size;
+				item_size = headers[i].sh_entsize;
+				link = headers[i].sh_link;
+				if (link <= 0)
+					break;
+				for (int j = 0;j + item_size <= size;j += item_size) {
+					if (fseek(fp, offset + j, SEEK_SET) < 0)
+						continue;
+					if (fread(&symb, sizeof(symb), 1, fp) != 1)
+						continue;
+					if (ELF64_ST_TYPE(symb.st_info) != STT_FUNC )
+						continue;
+					flink = symb.st_shndx;
+					if (flink == 0)
+						continue;
+					fsize = symb.st_size;
+					faddr = symb.st_value;
+					if (faddr > p_vaddr + p_size)
+						continue;
+					ix = symb.st_name;
+					if (ix == 0)
+						continue;
+					if (fseek(fp, headers[link].sh_offset + ix, SEEK_SET) < 0)
+						continue;
+					if (fgets(fname, sizeof(fname), fp) == NULL)
+						continue;
+					faddr = faddr - p_vaddr + dso_p->offset;
+					dso_p->sym = realloc(dso_p->sym, sizeof(struct dso_sym) * (dso_p->length + 1));
+					if (dso_p->sym == NULL)  {
+						printf("Failed to add symbol to dso %s\n", dso_p->path);
+						err = -1;
+						goto elf_parse_cleanup;
+					}
+					struct dso_sym dso_sym_tmp = {
+						.addr = faddr
+					};
+					dso_p->sym[dso_p->length] = dso_sym_tmp;
+					/* copy the name after assignment */
+					strcpy(dso_p->sym[dso_p->length].name, fname);
+					++dso_p->length;
+				}
+				break;
+			default:
+				break;
+		}
+	}
+
+elf_parse_cleanup:
+	free(headers);
+	return err;
+
+elf_parse_err:
+	return err;
+}
+
+#endif

@@ -3,14 +3,11 @@
 
 # don't trace executable(including test executable)
 sberf
-sberf_test
+tsb
 
 # build folder
 build
 build_bpf
-
-# exclude test folder
-test
 
 # eBPF header
 vmlinux.h
@@ -23,3 +20,4 @@ null
 # 
 note
 zdeprecated
+nohup.out
