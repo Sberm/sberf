@@ -63,17 +63,22 @@ struct usyms {
 struct ksyms *ksyms_tb;
 struct usyms *usyms_tb;
 
-void remove_space(char *s);
+void remove_space(char* s, int len);
 int lines_of_file(FILE* fp);
+
 const struct ksyms* ksym_load();
 int ksym_init(struct ksyms* ksym_tb, const int length);
 int ksym_free(struct ksyms* ksym_tb);
+int ksym_addr_to_sym(const struct ksyms *ksym_tb, const unsigned long long addr, char *str);
+
 const struct usyms* usym_load(int pid);
 int usym_init(struct usyms* usym_tb);
 int usym_add(struct usyms *usym_tb, const char *path, 
              const unsigned long long start_addr, const unsigned long long end_addr,
 			 const unsigned long offset);
 int usym_free(struct usyms *usym_tb);
+int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr, char *str);
+
 int dso_load(struct dso *dso_p);
 int dso_free(struct dso *dso_p);
 int elf_parse(FILE *fp, struct dso *dso_p);
@@ -81,22 +86,49 @@ int elf_parse(FILE *fp, struct dso *dso_p);
 
 /* Definition */
 
-void remove_space(char *s)
+static int dso_compar(const void *a, const void *b)
 {
-	char *d = s;
+	struct dso_sym *ap, *bp;
+	ap = (struct dso_sym*)a;
+	bp = (struct dso_sym*)b;
+	// TODO is it good to cast?
+	return (long long)ap->addr - (long long)bp->addr;
+}
+
+
+void remove_space(char* s, int len)
+{
+	int i = 0, j = 0;
 	do {
-		while (*d == ' ')
-			++d;
-	} while (*s++ = *d++);
+		while (j < len && s[j] == ' ')
+			++j;
+		s[i++] = s[j++];
+	} while (i < len && j < len);
 }
 
 int lines_of_file(FILE* fp)
 {
-	char c;
+	//char c;
+	//int cnt = 0;
+	//for (c = getc(fp); c != EOF; c = getc(fp))
+		//if (c == '\n')
+			//++cnt;
+	//rewind(fp);
+	//return cnt;
 	int cnt = 0;
-	for (c = getc(fp); c != EOF; c = getc(fp))
-		if (c == '\n')
-			++cnt;
+	char c;
+	while (1) {
+		int ret = fscanf(fp, "%*llx %c %*s%*[^\n]\n", &c);
+		if (ret == EOF)
+			break;
+		if (ret != 1) {
+			printf("Failed to find lines of file\n");
+			return -1;
+		}
+		if (c != 'T' && c != 't')
+			continue;
+		++cnt;
+	}
 	rewind(fp);
 	return cnt;
 }
@@ -166,6 +198,35 @@ int ksym_free(struct ksyms* ksym_tb)
 	return 0;
 }
 
+int ksym_addr_to_sym(const struct ksyms *ksym_tb, unsigned long long addr, char *str)
+{
+	size_t low = 0;
+	size_t high = ksym_tb->length - 1;
+	size_t middle;
+	size_t max_high = high;
+	unsigned long long middle_addr;
+
+	while (low < high) {
+		middle = (low + high) / 2;
+		middle_addr = ksym_tb->sym[middle].addr;
+		if (middle_addr < addr) {
+			high = middle - 1;
+		} else if (middle_addr > addr) {
+			low = middle + 1;
+		} else {
+			low = middle;
+			break;
+		}
+		if ((low != high) && ((long long)low > (long long)max_high || (long long)high < 0)) {
+			strcpy(str, "[unknown]");
+			return 0;
+		}
+	}
+
+	strcpy(str, ksym_tb->sym[low].name);
+	return 0;
+}
+
 int usym_init(struct usyms *usym_tb) 
 {
 	usym_tb->dsos = NULL;
@@ -203,6 +264,9 @@ int usym_add(struct usyms *usym_tb, const char *path,
 		return -1;
 	}
 
+	// sort dso
+	qsort(dso_p->sym, dso_p->length, sizeof(struct dso_sym), dso_compar);
+
 	return 0;
 }
 
@@ -218,13 +282,13 @@ const struct usyms* usym_load(int pid)
 
 	int index = 0;
 	unsigned long long start_addr, end_addr;
-	unsigned long offset;
+	unsigned int offset;
 	char path[1024];
 	char last_path[1024] = {0};
 
 	while (1) {
 		int ret = fscanf(fp, "%llx-%llx %*s %x %*x:%*x %*u%[^\n]\n", &start_addr, &end_addr, &offset, path);
-		remove_space(path);
+		remove_space(path, ARRAY_LEN(path));
 		if (ret == EOF)
 			break;
 		if (offset == 0)
@@ -235,6 +299,9 @@ const struct usyms* usym_load(int pid)
 		}
 		/* discard duplicated path */
 		if (strcmp(last_path, path) == 0) {
+			/* for duplicated path, update the largest address number */
+			struct dso *last_dso = &usym_tb->dsos[usym_tb->length - 1];
+			last_dso->end_addr = end_addr;
 			continue;
 		}
 		strcpy(last_path, path);
@@ -266,6 +333,61 @@ int usym_free(struct usyms *usym_tb)
 	}
 	free(usym_tb->dsos);
 	usym_tb->dsos = NULL;
+	return 0;
+}
+
+int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr, char *str)
+{
+	size_t low = 0;
+	size_t high = usym_tb->length - 1;
+	size_t middle;
+	size_t max_high = high;
+	unsigned long long s_addr, e_addr, middle_addr;
+	/* find the right dso */
+	while (low < high) {
+		middle = (low + high) / 2;
+		s_addr = usym_tb->dsos[middle].start_addr;
+		e_addr = usym_tb->dsos[middle].end_addr;
+		if (addr < s_addr) {
+			high = middle - 1;
+		} else if (addr > e_addr) {
+			low = middle + 1;
+		} else if (addr > s_addr && addr < e_addr) {
+			low = middle;
+			break;
+		}
+
+		if ((low != high) && ((long long)low > (long long)max_high || (long long)high < 0)) {
+			strcpy(str, "[unknown]");
+			return 0;
+		}
+	}
+
+	/* low is the dso index we dive into */
+	unsigned long long dso_offset = usym_tb->dsos[low].start_addr;
+	struct dso dso_ = usym_tb->dsos[low];
+
+	low = 0;
+	high = dso_.length - 1;
+	max_high = high;
+
+	while (low < high) {
+		middle = (low + high) / 2;
+		middle_addr = dso_.sym[middle].addr + dso_offset;
+		if (middle_addr > addr) {
+			high = middle - 1;
+		} else if (middle_addr < addr) {
+			low = middle + 1;
+		} else {
+			low = middle;
+			break;
+		}
+		if ((low != high) && ((long long)low > (long long)max_high || (long long)high < 0)) {
+			strcpy(str, "[unknown]");
+			return 0;
+		}
+	}
+	strcpy(str, dso_.sym[low].name);
 	return 0;
 }
 

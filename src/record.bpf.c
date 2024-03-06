@@ -67,7 +67,7 @@ int profile(struct bpf_perf_event_data *ctx)
 		return 0;
 	}
 	
-	struct key_t key = {}
+	struct key_t key = {};
 
 	key_samp = bpf_map_lookup_insert(&key, &stack_map, &zero);
 	if (key_samp)
