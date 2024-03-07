@@ -17,7 +17,7 @@ CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
 VMLINUX ?= vmlinux/vmlinux.h
 LIBS ?= -l:libbpf.a -lelf -lz 
-UTILS_H := util.h bpf_util.h
+UTILS_H := util.h bpf_util.h sym.h
 UTILS := $(addprefix $(SRCDIR)/,$(UTILS_H))
 
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
@@ -52,7 +52,7 @@ INCLUDE := -Ivmlinux -Isrc -I/usr/include
 # bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
 # llvm-strip去除tmp.bpf.o中的DWARF信息
 # bpftool生成bpf.o
-$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard %.h)$(VMLINUX) $(UTILS) | $(SKEL_DIR)
+$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard %.h) $(VMLINUX) $(UTILS) | $(SKEL_DIR)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
 		-Ivmlinux -c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)

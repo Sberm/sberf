@@ -273,7 +273,8 @@ const struct usyms* usym_load(const int *pids, size_t length)
 	unsigned long long start_addr, end_addr;
 	unsigned int offset;
 	char path[1024];
-	char last_path[1024] = {0};
+	char last_path[1024] = "&*&*gugu";
+	unsigned int inode;
 
 	for (size_t i = 0;i < length;i++) {
 		/* read maps of process to get all dso */
@@ -282,13 +283,13 @@ const struct usyms* usym_load(const int *pids, size_t length)
 
 		index = 0;
 		while (1) {
-			int ret = fscanf(fp, "%llx-%llx %*s %x %*x:%*x %*u%[^\n]\n", &start_addr, &end_addr, &offset, path);
+			int ret = fscanf(fp, "%llx-%llx %*s %x %*x:%*x %u%[^\n]\n", &start_addr, &end_addr, &offset, &inode, path);
 			remove_space(path, ARRAY_LEN(path));
 			if (ret == EOF)
 				break;
-			if (offset == 0)
+			if (inode == 0)
 				continue;
-			if (ret != 4) {
+			if (ret != 5) {
 				printf("Failed to read user maps\n");
 				goto usym_load_cleanup;
 			}
