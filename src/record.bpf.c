@@ -22,65 +22,72 @@
  */
 
 #include "vmlinux.h"
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_tracing.h>
-#include <bpf/bpf_core_read.h>
 #include <stdbool.h>
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_core_read.h>
+#include <bpf/bpf_tracing.h>
 
 #include "record.h"
+#include "bpf_util.h"
+#include "util.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 // specific pid
 volatile bool spec_pid = false;
-volatile pid_t pid_to_trace[MAX_PID] = {0};
+volatile pid_t pids[MAX_PID] = {0};
 
 // init value for insertion into map
 static const u64 zero;
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, MAX_ENTRIES);
-    __type(key, key_t);
-    __type(value, u64);
-} sample SEC(".maps");
-
-struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
-	__uint(key, u32);
+	__type(key, u32);
 } stack_map SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, struct key_t);
+    __type(value, u64);
+    __uint(max_entries, MAX_ENTRIES);
+} sample SEC(".maps");
 
 SEC("perf_event")
 int profile(struct bpf_perf_event_data *ctx)
 {
-	pid_t pid = bpf_get_current_pid_tgid() >> 32;
+	u64 id = bpf_get_current_pid_tgid();
+	u32 pid = id >> 32;
 
 	// if to trace only specific pids
 	if (spec_pid) {
-		for (int i = 0;i < ARRAY_LEN(pid_to_trace); i++) {
-			if (pid_to_trace[i] == 0)
+		int i;
+		for (i = 0;i < ARRAY_LEN(pids); i++) {
+			if (pids[i] == 0)
 				return 0;
-			if (pid_to_trace[i] == pid)
+			if (pids[i] == pid)
 				break;
 		}
-		return 0;
+		/* didn't match through the whole pids array */
+		if (i == ARRAY_LEN(pids))
+			return 0;
 	}
-	
+
 	struct key_t key = {};
 
-	key_samp = bpf_map_lookup_insert(&key, &stack_map, &zero);
+	key.pid = pid;
+	bpf_get_current_comm(&key.comm, sizeof(key.comm));
+	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
+	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK);
+
+	bpf_printk("[debug] %d %d %s\n", key.kern_stack_id, key.user_stack_id, key.comm);
+
+	u64* key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
 	if (key_samp)
-		__sync_fetch_and_add(valp, 1);
+		__sync_fetch_and_add(key_samp, 1);
 	else {
 		bpf_printk("Failed to look up stack sample");
 		return -1;
 	}
-
-	key.pid = pid;
-	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK)
-	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0)
-	bpf_get_current_comm(&key.comm, sizeof(key.comm));
 
 	return 0;
 }

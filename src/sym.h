@@ -71,7 +71,7 @@ int ksym_init(struct ksyms* ksym_tb, const int length);
 int ksym_free(struct ksyms* ksym_tb);
 int ksym_addr_to_sym(const struct ksyms *ksym_tb, const unsigned long long addr, char *str);
 
-const struct usyms* usym_load(int pid);
+const struct usyms* usym_load(const int *pids, size_t length);
 int usym_init(struct usyms* usym_tb);
 int usym_add(struct usyms *usym_tb, const char *path, 
              const unsigned long long start_addr, const unsigned long long end_addr,
@@ -108,13 +108,6 @@ void remove_space(char* s, int len)
 
 int lines_of_file(FILE* fp)
 {
-	//char c;
-	//int cnt = 0;
-	//for (c = getc(fp); c != EOF; c = getc(fp))
-		//if (c == '\n')
-			//++cnt;
-	//rewind(fp);
-	//return cnt;
 	int cnt = 0;
 	char c;
 	while (1) {
@@ -270,45 +263,48 @@ int usym_add(struct usyms *usym_tb, const char *path,
 	return 0;
 }
 
-const struct usyms* usym_load(int pid)
+const struct usyms* usym_load(const int *pids, size_t length)
 {
 	struct usyms *usym_tb = malloc(sizeof(struct usyms));
 	usym_init(usym_tb);
-
-	/* read maps of process to get all dso */
+	FILE* fp;
 	char maps_path[256];
-	sprintf(maps_path, "/proc/%d/maps", pid);
-	FILE* fp = fopen(maps_path, "r");
-
-	int index = 0;
+	int index, err;
 	unsigned long long start_addr, end_addr;
 	unsigned int offset;
 	char path[1024];
 	char last_path[1024] = {0};
 
-	while (1) {
-		int ret = fscanf(fp, "%llx-%llx %*s %x %*x:%*x %*u%[^\n]\n", &start_addr, &end_addr, &offset, path);
-		remove_space(path, ARRAY_LEN(path));
-		if (ret == EOF)
-			break;
-		if (offset == 0)
-			continue;
-		if (ret != 4) {
-			printf("Failed to read user maps\n");
-			goto usym_load_cleanup;
-		}
-		/* discard duplicated path */
-		if (strcmp(last_path, path) == 0) {
-			/* for duplicated path, update the largest address number */
-			struct dso *last_dso = &usym_tb->dsos[usym_tb->length - 1];
-			last_dso->end_addr = end_addr;
-			continue;
-		}
-		strcpy(last_path, path);
-		int err = usym_add(usym_tb, path, start_addr, end_addr, offset);
-		if (err) {
-			printf("Failed to read dso %s\n", path);
-			goto usym_load_cleanup;
+	for (size_t i = 0;i < length;i++) {
+		/* read maps of process to get all dso */
+		sprintf(maps_path, "/proc/%d/maps", pids[i]);
+		fp = fopen(maps_path, "r");
+
+		index = 0;
+		while (1) {
+			int ret = fscanf(fp, "%llx-%llx %*s %x %*x:%*x %*u%[^\n]\n", &start_addr, &end_addr, &offset, path);
+			remove_space(path, ARRAY_LEN(path));
+			if (ret == EOF)
+				break;
+			if (offset == 0)
+				continue;
+			if (ret != 4) {
+				printf("Failed to read user maps\n");
+				goto usym_load_cleanup;
+			}
+			/* discard duplicated path */
+			if (strcmp(last_path, path) == 0) {
+				/* for duplicated path, update the largest address number */
+				struct dso *last_dso = &usym_tb->dsos[usym_tb->length - 1];
+				last_dso->end_addr = end_addr;
+				continue;
+			}
+			strcpy(last_path, path);
+			err = usym_add(usym_tb, path, start_addr, end_addr, offset);
+			if (err) {
+				printf("Failed to read dso %s\n", path);
+				goto usym_load_cleanup;
+			}
 		}
 	}
 
@@ -393,7 +389,6 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 
 int dso_load(struct dso *dso_p)
 {
-	printf("Loading symbol from: %s\n", dso_p->path);
 	FILE* fp = fopen(dso_p->path, "rb");
 	if (fp == NULL) {
 		printf("Failed to open file %s\n", dso_p->path);

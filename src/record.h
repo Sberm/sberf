@@ -24,7 +24,8 @@
 #define MAX_FILENAME_LEN 127
 #define STACK_BUF_LEN 1024
 #define MAX_ENTRIES 8192
-#define MAX_PID 8192
+#define MAX_PID 64
+#define PERF_MAX_STACK_DEPTH 127
 
 struct key_t {
 	__u32 pid;

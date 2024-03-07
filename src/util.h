@@ -24,6 +24,4 @@
 #define DS(s) printf("[Debug] %s\n", (s));
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
 
-void* bpf_map_lookup_insert(void *map, const void *key, const void *init_val);
-
 #endif

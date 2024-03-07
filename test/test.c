@@ -18,7 +18,7 @@ void test_ksym()
 void test_usym() 
 {
 	int pid = 1001;
-	const struct usyms *usym_tb = usym_load(pid);
+	const struct usyms *usym_tb = usym_load(pid, 1);
 	if (usym_tb == NULL)
 		DS("Failed to load userspace symbols from test")
 
@@ -38,7 +38,7 @@ void test_addr_to_name()
 {
 	const struct ksyms* ksym_tb = ksym_load();
 	int pid = 1001;
-	const struct usyms *usym_tb = usym_load(pid);
+	const struct usyms *usym_tb = usym_load(pid, 1);
 
 	if (ksym_tb != NULL && usym_tb != NULL) {
 		printf("Successfully loaded\n");
@@ -73,10 +73,16 @@ void test_addr_to_name()
 	printf("got user symbol: [%s]\n" ,name);
 }
 
+void test_random() {
+	/* 8 8 */
+	printf("%d %d\n", sizeof(unsigned long), sizeof(unsigned long long));
+}
+
 int main() 
 {
 	// test_ksym();
  	// test_usym();
-	test_addr_to_name();
+	// test_addr_to_name();
+	// test_random();
 	return 0;
 }
