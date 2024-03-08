@@ -198,6 +198,7 @@ int ksym_addr_to_sym(const struct ksyms *ksym_tb, unsigned long long addr, char 
 	size_t middle;
 	size_t max_high = high;
 	unsigned long long middle_addr;
+	int flag = 0;
 
 	while (low < high) {
 		middle = (low + high) / 2;
@@ -208,6 +209,7 @@ int ksym_addr_to_sym(const struct ksyms *ksym_tb, unsigned long long addr, char 
 			low = middle + 1;
 		} else {
 			low = middle;
+			flag = 1;
 			break;
 		}
 		if ((low != high) && ((long long)low > (long long)max_high || (long long)high < 0)) {
@@ -215,8 +217,10 @@ int ksym_addr_to_sym(const struct ksyms *ksym_tb, unsigned long long addr, char 
 			return 0;
 		}
 	}
-
-	strcpy(str, ksym_tb->sym[low].name);
+	if (flag == 0)
+		strcpy(str, ksym_tb->sym[low].name);
+	else
+		strcpy(str, "[unknown]");
 	return 0;
 }
 
@@ -340,6 +344,12 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	size_t middle;
 	size_t max_high = high;
 	unsigned long long s_addr, e_addr, middle_addr;
+	int flag = 0;
+
+
+	if (addr > usym_tb->dsos[usym_tb->length - 1].end_addr)
+		goto usym_unknown;
+
 	/* find the right dso */
 	while (low < high) {
 		middle = (low + high) / 2;
@@ -355,8 +365,7 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 		}
 
 		if ((low != high) && ((long long)low > (long long)max_high || (long long)high < 0)) {
-			strcpy(str, "[unknown]");
-			return 0;
+			goto usym_unknown;
 		}
 	}
 
@@ -368,6 +377,7 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	high = dso_.length - 1;
 	max_high = high;
 
+	flag = 0;
 	while (low < high) {
 		middle = (low + high) / 2;
 		middle_addr = dso_.sym[middle].addr + dso_offset;
@@ -377,14 +387,19 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 			low = middle + 1;
 		} else {
 			low = middle;
+			flag = 1;
 			break;
 		}
 		if ((low != high) && ((long long)low > (long long)max_high || (long long)high < 0)) {
-			strcpy(str, "[unknown]");
-			return 0;
+			goto usym_unknown;
 		}
 	}
+
 	strcpy(str, dso_.sym[low].name);
+	return 0;
+
+usym_unknown:
+	strcpy(str, "[unknown]");
 	return 0;
 }
 
