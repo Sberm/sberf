@@ -24,7 +24,6 @@
 #include <elf.h>
 #include <string.h>
 #include <stdlib.h>
-#include "util.h"
 
 #define KSYM_PATH "/proc/kallsyms"
 
@@ -63,6 +62,8 @@ struct usyms {
 struct ksyms *ksyms_tb;
 struct usyms *usyms_tb;
 
+static int dso_compar(const void *a, const void *b);
+static int ksym_compar(const void *a, const void *b);
 void remove_space(char* s, int len);
 int lines_of_file(FILE* fp);
 
@@ -83,18 +84,47 @@ int dso_load(struct dso *dso_p);
 int dso_free(struct dso *dso_p);
 int elf_parse(FILE *fp, struct dso *dso_p);
 
-
 /* Definition */
 
+// TODO is it good to cast long long to int?
 static int dso_compar(const void *a, const void *b)
 {
 	struct dso_sym *ap, *bp;
 	ap = (struct dso_sym*)a;
 	bp = (struct dso_sym*)b;
-	// TODO is it good to cast?
-	return (long long)ap->addr - (long long)bp->addr;
+
+	long long res = (long long)ap->addr - (long long)bp->addr;
+	if (res < 0)
+		return -1;
+	else if (res > 0) 
+		return 1;
+	else
+		return 0;
 }
 
+static int ksym_compar(const void *a, const void *b)
+{
+	unsigned long long a_addr, b_addr;
+	a_addr = ((struct ksym*)a)->addr;
+	b_addr = ((struct ksym*)b)->addr;
+
+	// just incase
+	if (a_addr >= 0xf000000000000000 && b_addr >= 0xf000000000000000) {
+		a_addr -= 0xf000000000000000;
+		b_addr -= 0xf000000000000000;
+	} else if (a_addr >= 0xf000000000000000) {
+		return 1;
+	} else if (b_addr >= 0xf000000000000000) {
+		return -1;
+	}
+
+	if (((long long)a_addr - (long long)b_addr) < 0)
+		return -1;
+	else if (((long long)a_addr - (long long)b_addr) > 0)
+		return 1;
+	else
+		return 0;
+}
 
 void remove_space(char* s, int len)
 {
@@ -174,6 +204,11 @@ const struct ksyms* ksym_load()
 		}
 	}
 
+	// sort kernel symbols
+	qsort(ksym_tb->sym, ksym_tb->length, sizeof(struct ksym), ksym_compar);
+	
+	printf("after loading: length %lld s %llx l %llx\n", ksym_tb->length, ksym_tb->sym[0].addr, ksym_tb->sym[ksym_tb->length - 1].addr);
+
 	fclose(fp);
 	return ksym_tb;
 
@@ -198,29 +233,45 @@ int ksym_addr_to_sym(const struct ksyms *ksym_tb, unsigned long long addr, char 
 	size_t middle;
 	size_t max_high = high;
 	unsigned long long middle_addr;
+	unsigned long long res_offset = 0;
 	int flag = 0;
+
+	if (ksym_tb->length >= 1 && addr > ksym_tb->sym[ksym_tb->length - 1].addr)
+		goto ksym_unknown;
+
+	if (ksym_tb->length >= 1 && addr < ksym_tb->sym[0].addr)
+		goto ksym_unknown;
 
 	while (low < high) {
 		middle = (low + high) / 2;
 		middle_addr = ksym_tb->sym[middle].addr;
-		if (middle_addr < addr) {
-			high = middle - 1;
-		} else if (middle_addr > addr) {
-			low = middle + 1;
-		} else {
+		if (middle + 1 < ksym_tb->length && middle_addr <= addr && addr < ksym_tb->sym[middle + 1].addr ) {
+			res_offset = addr - middle_addr;
 			low = middle;
-			flag = 1;
 			break;
-		}
-		if ((low != high) && ((long long)low > (long long)max_high || (long long)high < 0)) {
-			strcpy(str, "[unknown]");
-			return 0;
+		} else if (middle == ksym_tb->length - 1 && middle_addr <= addr) {
+			res_offset = addr - middle_addr;
+			low = middle;
+			break;
+		} else if (middle_addr > addr) {
+			high = middle - 1;
+		} else if (middle_addr < addr) {
+			low = middle + 1;
+		} 
+
+		if (low > max_high || (long long)high < 0) {
+			goto ksym_unknown;
 		}
 	}
-	if (flag == 0)
-		strcpy(str, ksym_tb->sym[low].name);
-	else
-		strcpy(str, "[unknown]");
+
+	char res[128];
+	res_offset == 0 ? sprintf(res, "%s",ksym_tb->sym[low].name) : sprintf(res, "%s+0x%llx", ksym_tb->sym[low].name, res_offset);
+
+	strcpy(str, res);
+	return 0;
+
+ksym_unknown:
+	strcpy(str, "[unknown]");
 	return 0;
 }
 
@@ -277,7 +328,8 @@ const struct usyms* usym_load(const int *pids, size_t length)
 	unsigned long long start_addr, end_addr;
 	unsigned int offset;
 	char path[1024];
-	char last_path[1024] = "&*&*gugu";
+	char last_path[1024];
+	char type[5];
 	unsigned int inode;
 
 	for (size_t i = 0;i < length;i++) {
@@ -287,13 +339,13 @@ const struct usyms* usym_load(const int *pids, size_t length)
 
 		index = 0;
 		while (1) {
-			int ret = fscanf(fp, "%llx-%llx %*s %x %*x:%*x %u%[^\n]\n", &start_addr, &end_addr, &offset, &inode, path);
+			int ret = fscanf(fp, "%llx-%llx %s %x %*x:%*x %u%[^\n]\n", &start_addr, &end_addr, type, &offset, &inode, path);
 			remove_space(path, ARRAY_LEN(path));
 			if (ret == EOF)
 				break;
-			if (inode == 0)
+			if (inode == 0 || type[3] == 's')
 				continue;
-			if (ret != 5) {
+			if (ret != 6) {
 				printf("Failed to read user maps\n");
 				goto usym_load_cleanup;
 			}
@@ -337,6 +389,7 @@ int usym_free(struct usyms *usym_tb)
 	return 0;
 }
 
+// TODO: possible seg fault?
 int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr, char *str)
 {
 	size_t low = 0;
@@ -344,10 +397,13 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	size_t middle;
 	size_t max_high = high;
 	unsigned long long s_addr, e_addr, middle_addr;
+	unsigned long long res_offset = 0;
 	int flag = 0;
 
+	if (max_high >= 0 && addr < usym_tb->dsos[0].start_addr)
+		goto usym_unknown;
 
-	if (addr > usym_tb->dsos[usym_tb->length - 1].end_addr)
+	if (max_high >= 0 && addr > usym_tb->dsos[usym_tb->length - 1].end_addr)
 		goto usym_unknown;
 
 	/* find the right dso */
@@ -364,7 +420,7 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 			break;
 		}
 
-		if ((low != high) && ((long long)low > (long long)max_high || (long long)high < 0)) {
+		if (low > max_high || (long long)high < 0) {
 			goto usym_unknown;
 		}
 	}
@@ -378,24 +434,38 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	max_high = high;
 
 	flag = 0;
-	while (low < high) {
+	while (low <= high) {
 		middle = (low + high) / 2;
 		middle_addr = dso_.sym[middle].addr + dso_offset;
-		if (middle_addr > addr) {
+
+		/* corner case: duplicated symbols(middle & middle + 1) */
+		if (middle + 1 < dso_.length && middle_addr <= addr && addr < dso_.sym[middle + 1].addr + dso_offset) {
+			low = middle;
+			res_offset = addr - middle_addr;
+			break;
+		} else if (middle == dso_.length - 1 && middle_addr <= addr) {
+			low = middle;
+			res_offset = addr - middle_addr;
+			break;
+		} else if (middle_addr > addr) {
 			high = middle - 1;
 		} else if (middle_addr < addr) {
 			low = middle + 1;
-		} else {
+		} else if (middle_addr == addr) { // this if is actually for duplicated symbols
 			low = middle;
-			flag = 1;
+			res_offset = addr - middle_addr;
 			break;
 		}
-		if ((low != high) && ((long long)low > (long long)max_high || (long long)high < 0)) {
+
+		if (low > max_high || (long long)high < 0) {
 			goto usym_unknown;
 		}
 	}
 
-	strcpy(str, dso_.sym[low].name);
+	char res[128];
+	res_offset == 0 ? sprintf(res, "%s",dso_.sym[low].name) : sprintf(res, "%s+0x%llx", dso_.sym[low].name, res_offset);
+
+	strcpy(str, res);
 	return 0;
 
 usym_unknown:

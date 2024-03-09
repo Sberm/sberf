@@ -44,6 +44,15 @@ const struct ksyms* ksym_tb;
 /* user symbol table */
 const struct usyms* usym_tb;
 
+/* for storing command line options */ 
+static struct {
+	unsigned long long freq;
+	unsigned long long sample_freq; 
+} options = {
+	.freq = 1,
+	.sample_freq = 4999,
+};
+
 static void signalHandler(int signum)
 {
 }
@@ -54,7 +63,8 @@ int print_stack_frame(unsigned long long *frame, char mode)
 	if (mode == 'k') {
 		printf("[kernel]:\n");
 		for (size_t i = 0; frame[i] && i < PERF_MAX_STACK_DEPTH; i++) {
-			printf("  %lx\n", frame[i]);
+			ksym_addr_to_sym(ksym_tb, frame[i], name);
+			printf("  %lx %s\n", frame[i], name);
 		}
 	} else if (mode == 'u') {
 		printf("[user]:\n");
@@ -143,9 +153,9 @@ int cmd_record(int argc, char **argv)
 	// TODO: could be false
 	skel->bss->spec_pid = true;
 
-	unsigned long long freq = 1;
+	unsigned long long freq = options.freq;
 	// TODO: parse command
-	unsigned long long sample_freq = 1; 
+	unsigned long long sample_freq = options.sample_freq; 
 
 	struct perf_event_attr attr = {
 		.type = PERF_TYPE_SOFTWARE,
