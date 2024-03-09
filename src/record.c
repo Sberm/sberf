@@ -62,13 +62,13 @@ int print_stack_frame(unsigned long long *frame, char mode)
 	char name[128];
 	if (mode == 'k') {
 		printf("[kernel]:\n");
-		for (size_t i = 0; frame[i] && i < PERF_MAX_STACK_DEPTH; i++) {
+		for (int i = 0; frame[i] && i < PERF_MAX_STACK_DEPTH; i++) {
 			ksym_addr_to_sym(ksym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}
 	} else if (mode == 'u') {
 		printf("[user]:\n");
-		for (size_t i = 0; frame[i] && i < PERF_MAX_STACK_DEPTH; i++) {
+		for (int i = 0; frame[i] && i < PERF_MAX_STACK_DEPTH; i++) {
 			usym_addr_to_sym(usym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}

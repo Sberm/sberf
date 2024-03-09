@@ -24,6 +24,7 @@
 #include <elf.h>
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #define KSYM_PATH "/proc/kallsyms"
 
@@ -34,7 +35,7 @@ struct ksym {
 
 struct ksyms {
 	struct ksym* sym;
-	size_t length;
+	int length;
 };
 
 /* Unbelievably similar to ksym */
@@ -50,12 +51,12 @@ struct dso {
 	char path[1024];
 	struct dso_sym *sym;
 	/* dso_sym's length */
-	size_t length;
+	int length;
 };
 
 struct usyms {
 	struct dso *dsos;
-	size_t length;
+	int length;
 };
 
 /* kernel and user symbol table(_tb) */
@@ -72,7 +73,7 @@ int ksym_init(struct ksyms* ksym_tb, const int length);
 int ksym_free(struct ksyms* ksym_tb);
 int ksym_addr_to_sym(const struct ksyms *ksym_tb, const unsigned long long addr, char *str);
 
-const struct usyms* usym_load(const int *pids, size_t length);
+const struct usyms* usym_load(const int *pids, int length);
 int usym_init(struct usyms* usym_tb);
 int usym_add(struct usyms *usym_tb, const char *path, 
              const unsigned long long start_addr, const unsigned long long end_addr,
@@ -206,8 +207,6 @@ const struct ksyms* ksym_load()
 
 	// sort kernel symbols
 	qsort(ksym_tb->sym, ksym_tb->length, sizeof(struct ksym), ksym_compar);
-	
-	printf("after loading: length %lld s %llx l %llx\n", ksym_tb->length, ksym_tb->sym[0].addr, ksym_tb->sym[ksym_tb->length - 1].addr);
 
 	fclose(fp);
 	return ksym_tb;
@@ -228,10 +227,10 @@ int ksym_free(struct ksyms* ksym_tb)
 
 int ksym_addr_to_sym(const struct ksyms *ksym_tb, unsigned long long addr, char *str)
 {
-	size_t low = 0;
-	size_t high = ksym_tb->length - 1;
-	size_t middle;
-	size_t max_high = high;
+	int low = 0;
+	int high = ksym_tb->length - 1;
+	int middle;
+	int max_high = high;
 	unsigned long long middle_addr;
 	unsigned long long res_offset = 0;
 	int flag = 0;
@@ -257,9 +256,13 @@ int ksym_addr_to_sym(const struct ksyms *ksym_tb, unsigned long long addr, char 
 			high = middle - 1;
 		} else if (middle_addr < addr) {
 			low = middle + 1;
-		} 
+		} else if (middle_addr == addr) { // same as user symbol's duplication, just in case.
+			res_offset = addr - middle_addr;
+			low = middle;
+			break;
+		}
 
-		if (low > max_high || (long long)high < 0) {
+		if (low > max_high || high < 0) {
 			goto ksym_unknown;
 		}
 	}
@@ -318,7 +321,7 @@ int usym_add(struct usyms *usym_tb, const char *path,
 	return 0;
 }
 
-const struct usyms* usym_load(const int *pids, size_t length)
+const struct usyms* usym_load(const int *pids, int length)
 {
 	struct usyms *usym_tb = malloc(sizeof(struct usyms));
 	usym_init(usym_tb);
@@ -332,7 +335,7 @@ const struct usyms* usym_load(const int *pids, size_t length)
 	char type[5];
 	unsigned int inode;
 
-	for (size_t i = 0;i < length;i++) {
+	for (int i = 0;i < length;i++) {
 		/* read maps of process to get all dso */
 		sprintf(maps_path, "/proc/%d/maps", pids[i]);
 		fp = fopen(maps_path, "r");
@@ -378,7 +381,7 @@ usym_load_cleanup:
 
 int usym_free(struct usyms *usym_tb)
 {
-	for (size_t i = 0;i < usym_tb->length; i++) {
+	for (int i = 0;i < usym_tb->length; i++) {
 		if (dso_free(&usym_tb->dsos[i])) {
 			printf("Failed to free userspace symbol table's dso\n");
 			exit(-1);
@@ -392,13 +395,12 @@ int usym_free(struct usyms *usym_tb)
 // TODO: possible seg fault?
 int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr, char *str)
 {
-	size_t low = 0;
-	size_t high = usym_tb->length - 1;
-	size_t middle;
-	size_t max_high = high;
+	int low = 0;
+	int high = usym_tb->length - 1;
+	int middle;
+	int max_high = high;
 	unsigned long long s_addr, e_addr, middle_addr;
 	unsigned long long res_offset = 0;
-	int flag = 0;
 
 	if (max_high >= 0 && addr < usym_tb->dsos[0].start_addr)
 		goto usym_unknown;
@@ -420,21 +422,23 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 			break;
 		}
 
-		if (low > max_high || (long long)high < 0) {
+		if (low > max_high || high < 0)
 			goto usym_unknown;
-		}
 	}
 
 	/* low is the dso index we dive into */
 	unsigned long long dso_offset = usym_tb->dsos[low].start_addr;
 	struct dso dso_ = usym_tb->dsos[low];
 
+	if (dso_.length <= 0)
+		goto usym_unknown;
+
 	low = 0;
 	high = dso_.length - 1;
 	max_high = high;
 
-	flag = 0;
 	while (low <= high) {
+
 		middle = (low + high) / 2;
 		middle_addr = dso_.sym[middle].addr + dso_offset;
 
@@ -451,13 +455,13 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 			high = middle - 1;
 		} else if (middle_addr < addr) {
 			low = middle + 1;
-		} else if (middle_addr == addr) { // this if is actually for duplicated symbols
+		} else if (middle_addr == addr) { // this is actually for duplicated symbols
 			low = middle;
 			res_offset = addr - middle_addr;
 			break;
 		}
 
-		if (low > max_high || (long long)high < 0) {
+		if (low > max_high || high < 0) {
 			goto usym_unknown;
 		}
 	}

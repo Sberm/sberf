@@ -1,14 +1,14 @@
 ifeq ($(DEBUG), 1)
 	Q =
 	msg =
+	CFLAGS = -g -std=c11
 else
 	Q = @
 	msg = @printf '	%-8s %s%s\n' "$(1)" "$(2)" "$(if $(3), $(3))";
+	CFLAGS = -O2 -std=c11
 endif
 
 SBERF := sberf
-#CFLAGS ?= -g -O2 -Werror -std=c11
-CFLAGS ?= -g -O2 -std=c11
 SRCDIR := src
 OUTPUT ?= build
 SKEL_DIR := build_bpf

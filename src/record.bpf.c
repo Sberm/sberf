@@ -79,8 +79,6 @@ int profile(struct bpf_perf_event_data *ctx)
 	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
 	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK);
 
-	bpf_printk("[debug] %d %d %s\n", key.kern_stack_id, key.user_stack_id, key.comm);
-
 	u64* key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
 	if (key_samp)
 		__sync_fetch_and_add(key_samp, 1);
