@@ -24,7 +24,6 @@
 #include <elf.h>
 #include <string.h>
 #include <stdlib.h>
-#include <assert.h>
 
 #define KSYM_PATH "/proc/kallsyms"
 
@@ -59,10 +58,6 @@ struct usyms {
 	int length;
 };
 
-/* kernel and user symbol table(_tb) */
-struct ksyms *ksyms_tb;
-struct usyms *usyms_tb;
-
 static int dso_compar(const void *a, const void *b);
 static int ksym_compar(const void *a, const void *b);
 void remove_space(char* s, int len);
@@ -83,6 +78,7 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 
 int dso_load(struct dso *dso_p);
 int dso_free(struct dso *dso_p);
+int dso_find(const struct usyms* usym_tb, unsigned long long start_addr);
 int elf_parse(FILE *fp, struct dso *dso_p);
 
 /* Definition */
@@ -359,6 +355,9 @@ const struct usyms* usym_load(const int *pids, int length)
 				last_dso->end_addr = end_addr;
 				continue;
 			}
+			/* duplicated dsos from different pids */
+			if (dso_find(usym_tb, start_addr) != -1)
+				continue;
 			strcpy(last_path, path);
 			err = usym_add(usym_tb, path, start_addr, end_addr, offset);
 			if (err) {
@@ -399,32 +398,13 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	int high = usym_tb->length - 1;
 	int middle;
 	int max_high = high;
-	unsigned long long s_addr, e_addr, middle_addr;
-	unsigned long long res_offset = 0;
+	unsigned long long middle_addr, res_offset = 0;
 
-	if (max_high >= 0 && addr < usym_tb->dsos[0].start_addr)
+	/* low is the index of the dso we want */
+	low = dso_find(usym_tb, addr);
+
+	if (low == -1)
 		goto usym_unknown;
-
-	if (max_high >= 0 && addr > usym_tb->dsos[usym_tb->length - 1].end_addr)
-		goto usym_unknown;
-
-	/* find the right dso */
-	while (low < high) {
-		middle = (low + high) / 2;
-		s_addr = usym_tb->dsos[middle].start_addr;
-		e_addr = usym_tb->dsos[middle].end_addr;
-		if (addr < s_addr) {
-			high = middle - 1;
-		} else if (addr > e_addr) {
-			low = middle + 1;
-		} else if (addr > s_addr && addr < e_addr) {
-			low = middle;
-			break;
-		}
-
-		if (low > max_high || high < 0)
-			goto usym_unknown;
-	}
 
 	/* low is the dso index we dive into */
 	unsigned long long dso_offset = usym_tb->dsos[low].start_addr;
@@ -528,6 +508,16 @@ int dso_free(struct dso *dso_p)
 	return 0;
 }
 
+int dso_find(const struct usyms* usym_tb, unsigned long long addr) {
+	if (usym_tb->length == 0)
+		return -1;
+	for (int i = 0;i < usym_tb->length; i++) {
+		if (usym_tb->dsos[i].start_addr <= addr && addr <= usym_tb->dsos[i].end_addr)
+			return i;
+	}
+	return -1;
+}
+
 int elf_parse(FILE *fp, struct dso *dso_p)
 {
 	Elf64_Ehdr ehdr;
@@ -595,61 +585,61 @@ int elf_parse(FILE *fp, struct dso *dso_p)
 	}
 
 	Elf64_Sym symb;
- 	unsigned long long faddr, fsize;
-    unsigned long long size, item_size;
+	unsigned long long faddr, fsize;
+	unsigned long long size, item_size;
 
 	int link, flink, ix;
 
 	char fname[128];
 	for (int i = 0;i < num;i++) {
 		switch(headers[i].sh_type) {
-			case SHT_SYMTAB:
-			case SHT_DYNSYM:
-				offset = headers[i].sh_offset;
-				size = headers[i].sh_size;
-				item_size = headers[i].sh_entsize;
-				link = headers[i].sh_link;
-				if (link <= 0)
-					break;
-				for (int j = 0;j + item_size <= size;j += item_size) {
-					if (fseek(fp, offset + j, SEEK_SET) < 0)
-						continue;
-					if (fread(&symb, sizeof(symb), 1, fp) != 1)
-						continue;
-					if (ELF64_ST_TYPE(symb.st_info) != STT_FUNC )
-						continue;
-					flink = symb.st_shndx;
-					if (flink == 0)
-						continue;
-					fsize = symb.st_size;
-					faddr = symb.st_value;
-					if (faddr > p_vaddr + p_size)
-						continue;
-					ix = symb.st_name;
-					if (ix == 0)
-						continue;
-					if (fseek(fp, headers[link].sh_offset + ix, SEEK_SET) < 0)
-						continue;
-					if (fgets(fname, sizeof(fname), fp) == NULL)
-						continue;
-					faddr = faddr - p_vaddr + dso_p->offset;
-					dso_p->sym = realloc(dso_p->sym, sizeof(struct dso_sym) * (dso_p->length + 1));
-					if (dso_p->sym == NULL)  {
-						printf("Failed to add symbol to dso %s\n", dso_p->path);
-						err = -1;
-						goto elf_parse_cleanup;
-					}
-					struct dso_sym dso_sym_tmp = {
-						.addr = faddr
-					};
-					dso_p->sym[dso_p->length] = dso_sym_tmp;
-					/* copy the name after assignment */
-					strcpy(dso_p->sym[dso_p->length].name, fname);
-					++dso_p->length;
+		case SHT_SYMTAB:
+		case SHT_DYNSYM:
+			offset = headers[i].sh_offset;
+			size = headers[i].sh_size;
+			item_size = headers[i].sh_entsize;
+			link = headers[i].sh_link;
+			if (link <= 0)
+				break;
+			for (int j = 0;j + item_size <= size;j += item_size) {
+				if (fseek(fp, offset + j, SEEK_SET) < 0)
+					continue;
+				if (fread(&symb, sizeof(symb), 1, fp) != 1)
+					continue;
+				if (ELF64_ST_TYPE(symb.st_info) != STT_FUNC )
+					continue;
+				flink = symb.st_shndx;
+				if (flink == 0)
+					continue;
+				fsize = symb.st_size;
+				faddr = symb.st_value;
+				if (faddr > p_vaddr + p_size)
+					continue;
+				ix = symb.st_name;
+				if (ix == 0)
+					continue;
+				if (fseek(fp, headers[link].sh_offset + ix, SEEK_SET) < 0)
+					continue;
+				if (fgets(fname, sizeof(fname), fp) == NULL)
+					continue;
+				faddr = faddr - p_vaddr + dso_p->offset;
+				dso_p->sym = realloc(dso_p->sym, sizeof(struct dso_sym) * (dso_p->length + 1));
+				if (dso_p->sym == NULL)  {
+					printf("Failed to add symbol to dso %s\n", dso_p->path);
+					err = -1;
+					goto elf_parse_cleanup;
 				}
-				break;
-			default:
-				break;
+				struct dso_sym dso_sym_tmp = {
+					.addr = faddr
+				};
+				dso_p->sym[dso_p->length] = dso_sym_tmp;
+				/* copy the name after assignment */
+				strcpy(dso_p->sym[dso_p->length].name, fname);
+				++dso_p->length;
+			}
+			break;
+		default:
+			break;
 		}
 	}
 
