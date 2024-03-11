@@ -7,7 +7,7 @@
 ## Sberf
 Profiling/tracing/visualizing tool based on eBPF
 
-#### Usage
+#### Quick start
 
 Download the newest version in [Releases](https://github.com/Sberm/sberf/releases)
 
