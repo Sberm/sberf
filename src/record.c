@@ -37,37 +37,40 @@
 #include "util.h"
 #include "record.skel.h"
 #include "record.h"
+#include "stack.h"
 #include "sym.h"
 
 /* kernel symbol table */
-const struct ksyms* ksym_tb;
+struct ksyms* ksym_tb;
 /* user symbol table */
-const struct usyms* usym_tb;
+struct usyms* usym_tb;
 
 /* for storing command line options */ 
 static struct {
-	unsigned long long freq;
+	int freq;
 	unsigned long long sample_freq; 
+	int plot;
 } options = {
 	.freq = 1,
 	.sample_freq = 4999,
+	.plot = 1,
 };
 
 static void signalHandler(int signum)
 {
 }
 
-int print_stack_frame(unsigned long long *frame, char mode)
+int print_stack_frame(unsigned long long *frame, int sample_num, char mode)
 {
 	char name[128];
 	if (mode == 'k') {
-		printf("[kernel]:\n");
+		printf("[kernel] %d samples:\n", sample_num);
 		for (int i = 0; frame[i] && i < PERF_MAX_STACK_DEPTH; i++) {
 			ksym_addr_to_sym(ksym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}
 	} else if (mode == 'u') {
-		printf("[user]:\n");
+		printf("[user] %d samples:\n", sample_num);
 		for (int i = 0; frame[i] && i < PERF_MAX_STACK_DEPTH; i++) {
 			usym_addr_to_sym(usym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
@@ -90,9 +93,16 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample)
 	unsigned long long *frame = calloc(PERF_MAX_STACK_DEPTH, sizeof(unsigned long long));
 	int err;
 
-	int db = 0;
+	int sample_num = 0;
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
+
+		/* number of stack sample */
+		err = bpf_map_lookup_elem(sample_fd, &cur_key, &sample_num);
+		if (err) {
+			printf("Failed to retrieve number of stack sample");
+			sample_num = 0;
+		}
 
 		/* stack frame */
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kern_stack_id, frame);
@@ -101,14 +111,14 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample)
 			if (err)
 				printf("\n[kernel stack lost]\n");
 			else
-				print_stack_frame(frame, 'k');
+				print_stack_frame(frame, sample_num, 'k');
 		}
 
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->user_stack_id, frame);
 		if (err)
 			printf("\n[user stack lost]\n");
 		else
-			print_stack_frame(frame, 'u');
+			print_stack_frame(frame, sample_num, 'u');
 
 		last_key = cur_key;
 	} 
@@ -126,6 +136,22 @@ int split(char *str, pid_t *pids) {
 		token = strtok(NULL, ",");
 	}
 	return index;
+}
+
+int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, int num_of_pids) {
+	/* aggregate stack samples */
+	struct stack_ag* stack_ag_p = stack_aggre(stack_map, sample, pids, num_of_pids);
+
+	if (stack_ag_p == NULL) {
+		printf("Failed to aggregate stacks\n");
+		return -1;
+	}
+
+	/* plot the aggregated stack */
+	// plot(stack_ag_p);
+
+	/* free stack */
+	stack_free(stack_ag_p);
 }
 
 int cmd_record(int argc, char **argv)
@@ -203,14 +229,22 @@ int cmd_record(int argc, char **argv)
 	sleep(100);
 
 	/* load symbol table */
-	ksym_tb = ksym_load();
-	usym_tb = usym_load(pids, num_of_pids);
+	if (options.plot == 0) {
+		/* doesn't plot, just print */
+		ksym_tb = ksym_load();
+		usym_tb = usym_load(pids, num_of_pids);
 
-	if (ksym_tb && usym_tb)
-		printf("\nSymbols loaded\n");
+		if (ksym_tb && usym_tb)
+			printf("\nSymbols loaded\n");
 
-	print_stack(skel->maps.stack_map, skel->maps.sample);
+		print_stack(skel->maps.stack_map, skel->maps.sample);
 
+	} else {
+		/* plot */
+		record_plot(skel->maps.stack_map, skel->maps.sample, pids, num_of_pids);
+	}
+
+	
 cleanup:
 	record_bpf__destroy(skel);
 

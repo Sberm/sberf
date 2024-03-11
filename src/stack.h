@@ -1,7 +1,7 @@
 /*-*- coding:utf-8                                                          -*-│
-│vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
+│vi: set net ft=c ts=4 sts=4 sw=4 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2023 Howard Chu                                                    │
+│ Copyright 2024 Howard Chu                                                    │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -17,11 +17,20 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#include <stdio.h>
+#ifndef STACK_H
+#define STACK_H
 
-#include "sub_commands.h"
+#include <bpf/libbpf.h>
 
-int cmd_plot(int argc, char** argv)
-{
-	return 0;
-}
+struct stack_ag {
+	struct stack_ag *next;
+	struct stack_ag *child;
+	char name[128];
+	unsigned int cnt;
+};
+
+struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int num_of_pids);
+int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int frame_sz, char mode);
+void stack_free(struct stack_ag* stack_ag_p);
+
+#endif

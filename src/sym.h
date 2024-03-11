@@ -27,6 +27,10 @@
 
 #define KSYM_PATH "/proc/kallsyms"
 
+#ifndef ARRAY_LEN
+#define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
+#endif
+
 struct ksym {
 	unsigned long long addr;
 	char name[128];
@@ -63,12 +67,12 @@ static int ksym_compar(const void *a, const void *b);
 void remove_space(char* s, int len);
 int lines_of_file(FILE* fp);
 
-const struct ksyms* ksym_load();
+struct ksyms* ksym_load();
 int ksym_init(struct ksyms* ksym_tb, const int length);
 int ksym_free(struct ksyms* ksym_tb);
 int ksym_addr_to_sym(const struct ksyms *ksym_tb, const unsigned long long addr, char *str);
 
-const struct usyms* usym_load(const int *pids, int length);
+struct usyms* usym_load(const int *pids, int length);
 int usym_init(struct usyms* usym_tb);
 int usym_add(struct usyms *usym_tb, const char *path, 
              const unsigned long long start_addr, const unsigned long long end_addr,
@@ -82,6 +86,9 @@ int dso_find(const struct usyms* usym_tb, unsigned long long start_addr);
 int elf_parse(FILE *fp, struct dso *dso_p);
 
 /* Definition */
+
+#ifdef SYM_H_NO_DEF
+#else
 
 // TODO is it good to cast long long to int?
 static int dso_compar(const void *a, const void *b)
@@ -168,7 +175,7 @@ sym_init_cleanup:
 	return -1;
 }
 
-const struct ksyms* ksym_load()
+struct ksyms* ksym_load()
 {
 	FILE *fp = fopen(KSYM_PATH, "r");
 	int size = lines_of_file(fp);
@@ -264,7 +271,12 @@ int ksym_addr_to_sym(const struct ksyms *ksym_tb, unsigned long long addr, char 
 	}
 
 	char res[128];
-	res_offset == 0 ? sprintf(res, "%s",ksym_tb->sym[low].name) : sprintf(res, "%s+0x%llx", ksym_tb->sym[low].name, res_offset);
+
+	// TODO: could be used in certain circumstances
+	/* with offset */
+	// res_offset == 0 ? sprintf(res, "%s",ksym_tb->sym[low].name) : sprintf(res, "%s+0x%llx", ksym_tb->sym[low].name, res_offset);
+
+	sprintf(res, "%s",ksym_tb->sym[low].name);
 
 	strcpy(str, res);
 	return 0;
@@ -317,7 +329,7 @@ int usym_add(struct usyms *usym_tb, const char *path,
 	return 0;
 }
 
-const struct usyms* usym_load(const int *pids, int length)
+struct usyms* usym_load(const int *pids, int length)
 {
 	struct usyms *usym_tb = malloc(sizeof(struct usyms));
 	usym_init(usym_tb);
@@ -650,5 +662,5 @@ elf_parse_cleanup:
 elf_parse_err:
 	return err;
 }
-
-#endif
+#endif // SYM_H_NO_DEF
+#endif // SYM_H
