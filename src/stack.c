@@ -26,6 +26,13 @@
 #include "record.skel.h"
 #include "record.h"
 
+struct stack_ag {
+	struct stack_ag *next;
+	struct stack_ag *child;
+	char name[128];
+	unsigned int cnt;
+};
+
 /* kernel symbol table */
 struct ksyms* ksym_tb;
 /* user symbol table */
@@ -66,7 +73,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 			stack_ag_p->cnt = 0;
 		}
 
-		bpf_map_lookup_elem(sample_fd, &cur_key, &sample_num);
+		bpf_map_lookup_elem(sample_fd, cur_key, &sample_num);
 
 		/* stack frame */
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kern_stack_id, frame);
@@ -98,6 +105,11 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int fra
 	int index = 0;
 	struct stack_ag *p_parent = NULL;
 
+	// add one for the root frame
+	if (p) {
+		++p->cnt;
+	}
+
 	int err = 0;
 
 	/* cnt+1 the existed prefix */
@@ -109,6 +121,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int fra
 		}
 		if (err)
 			goto return_err;
+
 		if (strcmp(p->name, name) == 0) {
 			++p->cnt;
 			if (p->child == NULL) {

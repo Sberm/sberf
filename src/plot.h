@@ -17,15 +17,9 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#ifndef STACK_H
-#define STACK_H
+#ifndef PLOT_H
+#define PLOT_H
 
-#include <bpf/libbpf.h>
-
-struct stack_ag;
-
-struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int num_of_pids);
-int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int frame_sz, char mode);
-void stack_free(struct stack_ag* stack_ag_p);
+void plot(struct stack_ag* sp);
 
 #endif

@@ -39,6 +39,7 @@
 #include "record.h"
 #include "stack.h"
 #include "sym.h"
+#include "plot.h"
 
 /* kernel symbol table */
 struct ksyms* ksym_tb;
@@ -53,7 +54,7 @@ static struct {
 } options = {
 	.freq = 1,
 	.sample_freq = 4999,
-	.plot = 1,
+	.plot = 0,
 };
 
 static void signalHandler(int signum)
@@ -98,10 +99,14 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample)
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
 
 		/* number of stack sample */
-		err = bpf_map_lookup_elem(sample_fd, &cur_key, &sample_num);
+		err = bpf_map_lookup_elem(sample_fd, cur_key, &sample_num);
 		if (err) {
-			printf("Failed to retrieve number of stack sample");
+			printf("Failed to retrieve number of stack sample\n");
 			sample_num = 0;
+
+			printf("debug %d %d %d %s\n", cur_key->pid, cur_key->user_stack_id, cur_key->kern_stack_id, cur_key->comm);
+
+			exit(0);
 		}
 
 		/* stack frame */
@@ -148,7 +153,7 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 	}
 
 	/* plot the aggregated stack */
-	// plot(stack_ag_p);
+	plot(stack_ag_p);
 
 	/* free stack */
 	stack_free(stack_ag_p);
@@ -194,7 +199,6 @@ int cmd_record(int argc, char **argv)
 	bpf_map__set_value_size(skel->maps.stack_map, PERF_MAX_STACK_DEPTH * sizeof(unsigned long long));
 	bpf_map__set_max_entries(skel->maps.stack_map, MAX_ENTRIES);
 
-
 	err = record_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
@@ -221,6 +225,11 @@ int cmd_record(int argc, char **argv)
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
 		goto cleanup;
 	}
+
+	printf("Start recording pids: ");
+	for (int i = 0; i < num_of_pids; i++)
+		printf("%d ", pids[i]);
+	printf("\n");
 
 	/* consume sigint */
 	signal(SIGINT, signalHandler);

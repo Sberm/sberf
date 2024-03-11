@@ -32,7 +32,6 @@ struct cmd_struct {
 
 static struct cmd_struct commands[] = {
 	{"record", cmd_record},
-	{"plot", cmd_plot},
 };
 
 void print_help() {

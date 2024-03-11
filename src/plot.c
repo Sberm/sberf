@@ -17,11 +17,21 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#include <stdio.h>
+#include <stdlib.h>
+#include "stack.h"
+#include "plot.h"
 
-#include "sub_commands.h"
-
-int cmd_plot(int argc, char** argv)
+void plot_prvt()
 {
-	return 0;
+
+}
+
+void plot(struct stack_ag* sp)
+{
+	if (sp == NULL)
+		return;
+	
+	int depth = 0;
+	int left = 0, right = 100;
+
 }

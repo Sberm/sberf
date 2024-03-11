@@ -7,6 +7,22 @@
 ## Sberf
 Profiling/tracing/visualizing tool based on eBPF
 
+#### Usage
+
+1. Download the newest version in [Releases](https://github.com/Sberm/sberf/releases)
+
+2. Start using
+
+Usage
+
+```bash
+
+sudo ./sberf record <PID1>,<PID2>
+# sudo ./sberf record 1001
+# sudo ./sberf record 1001,32847
+
+```
+
 #### Compilation
 
 1. Install [bpftool](https://github.com/libbpf/bpftool)
@@ -51,14 +67,6 @@ DEBUG=1 make
 
 # mute
 make
-```
-
-#### Usage
-
-```bash
-# has to run with sudo
-sudo ./sberf record <PID>
-sudo ./sberf plot <REC>
 ```
 
 #### Files & their uses
