@@ -93,5 +93,5 @@ make
 [s2]: https://img.shields.io/badge/website-official-blue
 [l2]: https://sberm.cn/sberf
 
-[s3]: https://img.shields.io/badge/version-v0.0.1-green
+[s3]: https://img.shields.io/badge/version-v0.0.2-green
 [l3]: https://github.com/Sberm/Sberf.c/releases
