@@ -21,3 +21,5 @@ null
 note
 zdeprecated
 nohup.out
+
+*.svg

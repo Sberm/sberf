@@ -54,7 +54,7 @@ static struct {
 } options = {
 	.freq = 1,
 	.sample_freq = 4999,
-	.plot = 0,
+	.plot = 1,
 };
 
 static void signalHandler(int signum)
@@ -153,7 +153,7 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 	}
 
 	/* plot the aggregated stack */
-	plot(stack_ag_p);
+	plot(stack_ag_p, "debug");
 
 	/* free stack */
 	stack_free(stack_ag_p);

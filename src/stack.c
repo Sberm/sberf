@@ -25,13 +25,7 @@
 #include "stack.h"
 #include "record.skel.h"
 #include "record.h"
-
-struct stack_ag {
-	struct stack_ag *next;
-	struct stack_ag *child;
-	char name[128];
-	unsigned int cnt;
-};
+#include "util.h"
 
 /* kernel symbol table */
 struct ksyms* ksym_tb;
@@ -40,7 +34,6 @@ struct usyms* usym_tb;
 
 struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int num_of_pids)
 {
-
 	struct stack_ag* stack_ag_p = NULL;
 
 	int stack_map_fd = bpf_map__fd(stack_map);
@@ -82,14 +75,14 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 			if (err)
 				printf("\n[kernel stack lost]\n");
 			else
-				stack_insert(stack_ag_p, frame, PERF_MAX_STACK_DEPTH, 'k');
+				stack_insert(stack_ag_p, frame, sample_num, PERF_MAX_STACK_DEPTH, 'k');
 		}
 
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->user_stack_id, frame);
 		if (err)
 			printf("\n[user stack lost]\n");
 		else
-			stack_insert(stack_ag_p, frame, PERF_MAX_STACK_DEPTH, 'u');
+			stack_insert(stack_ag_p, frame, sample_num, PERF_MAX_STACK_DEPTH, 'u');
 
 		last_key = cur_key;
 
@@ -98,19 +91,27 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 	return stack_ag_p;
 }
 
-int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int frame_sz, char mode)
+int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sample_num, int frame_sz, char mode)
 {
+	int err = 0;
+
+	if (stack_ag_p == NULL) {
+		printf("No stacks to aggregate\n");
+		err = -1;
+		goto return_err;
+	}
+
 	struct stack_ag *p = stack_ag_p;
 	char name[128];
 	int index = 0;
 	struct stack_ag *p_parent = NULL;
 
-	// add one for the root frame
-	if (p) {
-		++p->cnt;
-	}
+	/* add one for the root frame */
+	p->cnt += sample_num;
 
-	int err = 0;
+	/* every stack frame is a child of root */
+	p_parent = p;
+	p = p->child;
 
 	/* cnt+1 the existed prefix */
 	while (p && index < frame_sz && frame[index]) {
@@ -123,7 +124,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int fra
 			goto return_err;
 
 		if (strcmp(p->name, name) == 0) {
-			++p->cnt;
+			p->cnt += sample_num;
 			if (p->child == NULL) {
 				p_parent = p;
 				break;
@@ -141,7 +142,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int fra
 			tmp->next = NULL;
 			tmp->child = NULL;
 			strcpy(tmp->name, name);
-			tmp->cnt = 0;
+			tmp->cnt = sample_num;
 			p->next = tmp;
 
 			p_parent = tmp;
@@ -170,7 +171,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int fra
 		tmp->next = NULL;
 		tmp->child = NULL;
 		strcpy(tmp->name, name);
-		tmp->cnt = 0;
+		tmp->cnt = sample_num;
 
 		p_parent->child = tmp;
 		p_parent = tmp;
@@ -187,4 +188,19 @@ void stack_free(struct stack_ag* p) {
 	stack_free(p->next);
 	stack_free(p->child);
 	free(p);
+}
+
+int stack_get_least_sample(struct stack_ag* p) {
+	if (p == NULL)
+		return 0;
+	int a = stack_get_least_sample(p->child);
+	int b = stack_get_least_sample(p->next);
+	if (a == 0 && b == 0)
+		return p->cnt;
+	else if (a == 0)
+		return min(p->cnt, b);
+	else if (b == 0)
+		return min(p->cnt, a);
+	else
+		return min(min(p->cnt, a), b);
 }

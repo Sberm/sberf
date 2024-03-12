@@ -459,7 +459,8 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	}
 
 	char res[128];
-	res_offset == 0 ? sprintf(res, "%s",dso_.sym[low].name) : sprintf(res, "%s+0x%llx", dso_.sym[low].name, res_offset);
+	// res_offset == 0 ? sprintf(res, "%s",dso_.sym[low].name) : sprintf(res, "%s+0x%llx", dso_.sym[low].name, res_offset);
+	sprintf(res, "%s", dso_.sym[low].name);
 
 	strcpy(str, res);
 	return 0;

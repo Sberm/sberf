@@ -20,10 +20,4 @@
 #ifndef SBERF_H
 #define SBERF_H
 
-// CLI -> PARSE COMMAND -> FUNCTION
-// 0. TEST
-// 1. FUNCTION
-// 2. UI DESIGN
-// 3. REPEAT
-
 #endif

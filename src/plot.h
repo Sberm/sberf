@@ -20,6 +20,8 @@
 #ifndef PLOT_H
 #define PLOT_H
 
-void plot(struct stack_ag* sp);
+#define FRAME_HEIGHT 15.0
+
+void plot(struct stack_ag *p, char* name_of_plot);
 
 #endif

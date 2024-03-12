@@ -24,4 +24,17 @@
 #define DS(s) printf("[Debug] %s\n", (s));
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
 
+/* avoid double evaluation */
+#define max(a,b) \
+({ __typeof__ (a) _a = (a); \
+   __typeof__ (b) _b = (b); \
+ _a > _b ? _a : _b; })
+
+#define min(a,b) \
+({ __typeof__ (a) _a = (a); \
+   __typeof__ (b) _b = (b); \
+ _a < _b ? _a : _b; })
+
+#define S(x) #x
+
 #endif
