@@ -4,7 +4,7 @@
 
 [![docs][s1]][l1] [![website][s2]][l2] [![version][s3]][l3] 
 
-![](https://sberm.cn/sberf/sberf-graph.png)
+![](images/sberf-graph.png)
 
 ## Sberf
 Profiling/tracing/visualizing tool based on eBPF
