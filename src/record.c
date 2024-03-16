@@ -53,7 +53,7 @@ static struct {
 	int plot;
 } options = {
 	.freq = 1,
-	.sample_freq = 4999,
+	.sample_freq = 3999,
 	.plot = 1,
 };
 
@@ -95,6 +95,7 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample)
 	int err;
 
 	int sample_num = 0;
+	int sample_num_total = 0;
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
 
@@ -103,11 +104,9 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample)
 		if (err) {
 			printf("Failed to retrieve number of stack sample\n");
 			sample_num = 0;
-
-			printf("debug %d %d %d %s\n", cur_key->pid, cur_key->user_stack_id, cur_key->kern_stack_id, cur_key->comm);
-
-			exit(0);
 		}
+
+		sample_num_total += sample_num;
 
 		/* stack frame */
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kern_stack_id, frame);
@@ -127,6 +126,8 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample)
 
 		last_key = cur_key;
 	} 
+	
+	printf("Collected %d samples\n", sample_num_total);
 }
 
 int split(char *str, pid_t *pids) {
@@ -145,15 +146,24 @@ int split(char *str, pid_t *pids) {
 
 int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, int num_of_pids) {
 	/* aggregate stack samples */
-	struct stack_ag* stack_ag_p = stack_aggre(stack_map, sample, pids, num_of_pids);
+	struct stack_ag* stack_ag_p = stack_aggre(stack_map, sample);
 
 	if (stack_ag_p == NULL) {
 		printf("Failed to aggregate stacks\n");
 		return -1;
 	}
 
+	// printf("Walked %d stack frames\n", stack_walk(stack_ag_p));
+	
+	char file_name[] = "./debug.svg";
+
 	/* plot the aggregated stack */
-	plot(stack_ag_p, "debug");
+	if(plot(stack_ag_p, file_name, pids, num_of_pids)) {
+		printf("Failed to plot");
+		return -1;
+	} else {
+		printf("\nPlotted to %s\n", file_name);
+	}
 
 	/* free stack */
 	stack_free(stack_ag_p);
@@ -163,9 +173,9 @@ int cmd_record(int argc, char **argv)
 {
 	// TODO: stoi illegal
 	if (argc < 3) {
-		char prompt[] = "\n  Usage:\n"
-		                "\n    sberf record <PID>\n\n";
-		printf("%s", prompt);
+		char help[] = "\n  Usage:\n"
+	                  "\n    sberf record <PID>\n\n";
+		printf("%s", help);
 		return 0;
 	}
 
@@ -174,7 +184,7 @@ int cmd_record(int argc, char **argv)
 
 	skel = record_bpf__open();
 	if (!skel) {
-		fprintf(stderr, "Failed to open and load BPF skeleton\n");
+		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
 		return 1;
 	}
 
@@ -208,7 +218,7 @@ int cmd_record(int argc, char **argv)
 	int fd;
 	struct bpf_link* link;
 	/* open on any cpu */
-	for (size_t i = 0;i < num_of_pids; i++) {
+	for (int i = 0;i < num_of_pids; i++) {
 		fd = syscall(__NR_perf_event_open, &attr, pids[i], -1, -1, PERF_FLAG_FD_CLOEXEC);
 		if (fd < 0) {
 			printf("Failed to open perf event for pid %d\n", pids[i]);
@@ -248,12 +258,14 @@ int cmd_record(int argc, char **argv)
 
 		print_stack(skel->maps.stack_map, skel->maps.sample);
 
-	} else {
+		ksym_free(ksym_tb);
+		usym_free(usym_tb);
+
+	} else if (options.plot == 1){
 		/* plot */
 		record_plot(skel->maps.stack_map, skel->maps.sample, pids, num_of_pids);
 	}
 
-	
 cleanup:
 	record_bpf__destroy(skel);
 

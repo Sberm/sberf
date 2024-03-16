@@ -34,9 +34,9 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 # *.c: 普通c文件，通过include skeleton header调用eBPF
 # *.o: 通过cc, 将所有常规.o文件链接，生成sberf可执行文件
 #
-# bpf.c --> bpf.tmp.o --> bpf.o --> skel.h
-#                                      \_ .c -> .o
-#                                                \_ sberf
+# bpf.c --Clang--> bpf.tmp.o --bpftool--> bpf.o --bpftool--> skel.h
+#                                                               \_ .c --gcc--> .o
+#                                                                               \_ sberf
 
 # bpf.c文件
 BPF_FILE := record.bpf.c

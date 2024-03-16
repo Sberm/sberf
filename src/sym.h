@@ -27,6 +27,8 @@
 
 #define KSYM_PATH "/proc/kallsyms"
 
+#define SYM_UNKNOWN 1
+
 #ifndef ARRAY_LEN
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
 #endif
@@ -62,6 +64,8 @@ struct usyms {
 	int length;
 };
 
+int addr_to_sym(const struct ksyms *ksym_tb, const struct usyms *usym_tb, const unsigned long long addr, char *str);
+
 static int dso_compar(const void *a, const void *b);
 static int ksym_compar(const void *a, const void *b);
 void remove_space(char* s, int len);
@@ -89,6 +93,23 @@ int elf_parse(FILE *fp, struct dso *dso_p);
 
 #ifdef SYM_H_NO_DEF
 #else
+
+int addr_to_sym(const struct ksyms *ksym_tb, const struct usyms *usym_tb, const unsigned long long addr, char *str)
+{
+	int err1 = 0, err2 = 0;
+	err1 = ksym_addr_to_sym(ksym_tb, addr, str);
+	err2 = usym_addr_to_sym(usym_tb, addr, str);
+
+	if ((err1 && err1 != SYM_UNKNOWN)||(err2 && err2 != SYM_UNKNOWN)) {
+		printf("Failed to find symbol for address: %llx", addr);
+		return -1;
+	}
+
+	if (err1 == err2 && err1 == SYM_UNKNOWN)
+		strcpy(str, "[unknown]");
+
+	return 0;
+}
 
 // TODO is it good to cast long long to int?
 static int dso_compar(const void *a, const void *b)
@@ -282,8 +303,7 @@ int ksym_addr_to_sym(const struct ksyms *ksym_tb, unsigned long long addr, char 
 	return 0;
 
 ksym_unknown:
-	strcpy(str, "[unknown]");
-	return 0;
+	return SYM_UNKNOWN;
 }
 
 int usym_init(struct usyms *usym_tb) 
@@ -466,8 +486,7 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	return 0;
 
 usym_unknown:
-	strcpy(str, "[unknown]");
-	return 0;
+	return SYM_UNKNOWN;
 }
 
 int dso_load(struct dso *dso_p)

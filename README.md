@@ -55,16 +55,24 @@ sudo yum install clang
 
 ```bash
 git clone https://github.com/Sberm/sberf.git
+cd sberf
 ```
 
-5. Make
+5. Generate vmlinux.h
 
 ```bash
-# verbose message
-DEBUG=1 make
+# generate vmlinux.h file to vmlinux folder
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux/vmlinux.h
+```
 
+6. Make
+
+```bash
 # mute
 make
+
+# verbose message
+DEBUG=1 make
 ```
 
 #### Files & their uses
@@ -82,9 +90,9 @@ make
 # *.c: regular c file, calling eBPF virtual machine through include skeleton header 
 # *.o: through CC, link all regular .o files to generate sberf executable file
 #
-# bpf.c --> bpf.tmp.o --> bpf.o --> skel.h
-#                                      \_ .c -> .o
-#                                                \_ sberf
+# bpf.c --Clang--> bpf.tmp.o --bpftool--> bpf.o --bpftool--> skel.h
+#                                                               \_ .c --gcc--> .o
+#                                                                               \_ sberf
 ```
 
 [s1]: https://img.shields.io/badge/docs-here-FFDB1A

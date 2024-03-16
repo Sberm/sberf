@@ -25,12 +25,13 @@
 struct stack_ag {
 	struct stack_ag *next;
 	struct stack_ag *child;
-	char name[128];
+	unsigned long long addr;
 	unsigned int cnt;
 };
 
-struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int num_of_pids);
-int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sample_num, int frame_sz, char mode);
+int stack_walk(struct stack_ag* p);
+struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample);
+int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sample_num, int frame_sz);
 void stack_free(struct stack_ag* stack_ag_p);
 int stack_get_least_sample(struct stack_ag* p);
 

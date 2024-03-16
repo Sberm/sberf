@@ -19,20 +19,20 @@
 
 // #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
-
-#define SYM_H_NO_DEF // don't include definition of sym.h, because it is included in record.c
-#include "sym.h"
 #include "stack.h"
 #include "record.skel.h"
 #include "record.h"
 #include "util.h"
 
-/* kernel symbol table */
-struct ksyms* ksym_tb;
-/* user symbol table */
-struct usyms* usym_tb;
+int stack_walk(struct stack_ag* p)
+{
+	if (p == NULL)
+		return 0;
 
-struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int num_of_pids)
+	return stack_walk(p->child) + stack_walk(p->next) + p->cnt;
+}
+
+struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 {
 	struct stack_ag* stack_ag_p = NULL;
 
@@ -48,12 +48,12 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 	int sample_num = 0;
 
 	/* symbol table */
-	ksym_tb = ksym_load();
-	usym_tb = usym_load(pids, num_of_pids);
-	if (ksym_tb == NULL || usym_tb == NULL) {
-		printf("Failed to load symbols when aggregating stack\n");
-		return NULL;
-	}
+	// ksym_tb = ksym_load();
+	// usym_tb = usym_load(pids, num_of_pids);
+	// if (ksym_tb == NULL || usym_tb == NULL) {
+	// 	printf("Failed to load symbols when aggregating stack\n");
+	// 	return NULL;
+	// }
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
 
@@ -62,7 +62,8 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 			stack_ag_p = malloc(sizeof(struct stack_ag));
 			stack_ag_p->next = NULL;
 			stack_ag_p->child = NULL;
-			strcpy(stack_ag_p->name, "all");
+			// strcpy(stack_ag_p->name, "all");
+			stack_ag_p->addr = 0;
 			stack_ag_p->cnt = 0;
 		}
 
@@ -74,15 +75,16 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 		if (cur_key->kern_stack_id != -EFAULT) {
 			if (err)
 				printf("\n[kernel stack lost]\n");
-			else
-				stack_insert(stack_ag_p, frame, sample_num, PERF_MAX_STACK_DEPTH, 'k');
+			else {
+				stack_insert(stack_ag_p, frame, sample_num, PERF_MAX_STACK_DEPTH);
+			}
 		}
 
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->user_stack_id, frame);
 		if (err)
 			printf("\n[user stack lost]\n");
 		else
-			stack_insert(stack_ag_p, frame, sample_num, PERF_MAX_STACK_DEPTH, 'u');
+			stack_insert(stack_ag_p, frame, sample_num, PERF_MAX_STACK_DEPTH);
 
 		last_key = cur_key;
 
@@ -91,7 +93,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 	return stack_ag_p;
 }
 
-int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sample_num, int frame_sz, char mode)
+int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sample_num, int frame_sz)
 {
 	int err = 0;
 
@@ -102,7 +104,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 	}
 
 	struct stack_ag *p = stack_ag_p;
-	char name[128];
+	// char name[128];
 	int index = 0;
 	struct stack_ag *p_parent = NULL;
 
@@ -113,18 +115,24 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 	p_parent = p;
 	p = p->child;
 
-	/* cnt+1 the existed prefix */
-	while (p && index < frame_sz && frame[index]) {
-		if (mode == 'k') {
-			err = ksym_addr_to_sym(ksym_tb, frame[index++], name);
-		} else if (mode == 'u') {
-			err = usym_addr_to_sym(usym_tb, frame[index++], name);
-		}
-		if (err)
-			goto return_err;
+	// move index to end
+	for (;frame[index] && index < frame_sz;index++) {}
+	--index;
 
-		if (strcmp(p->name, name) == 0) {
+	/* cnt+1 the existed prefix */
+	while (p && index >= 0) {
+		/*if (mode == 'k') {*/
+			/*err = ksym_addr_to_sym(ksym_tb, frame[index], name);*/
+		/*} else if (mode == 'u') {*/
+			/*err = usym_addr_to_sym(usym_tb, frame[index], name);*/
+		/*}*/
+		/*if (err)*/
+			/*goto return_err;*/
+
+		// if (strcmp(p->name, name) == 0) {
+		if (p->addr == frame[index]) {
 			p->cnt += sample_num;
+			--index;
 			if (p->child == NULL) {
 				p_parent = p;
 				break;
@@ -132,7 +140,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 			p = p->child;
 		} else if (p->next) {
 			p = p->next;
-		} else {
+		} else if (p->next == NULL){
 			struct stack_ag *tmp = malloc(sizeof(struct stack_ag));
 			if (tmp == NULL) {
 				err = -1;
@@ -141,26 +149,28 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 
 			tmp->next = NULL;
 			tmp->child = NULL;
-			strcpy(tmp->name, name);
+			// strcpy(tmp->name, name);
+			tmp->addr = frame[index];
 			tmp->cnt = sample_num;
 			p->next = tmp;
-
+			--index;
 			p_parent = tmp;
+			break;
+		} else {
+			p_parent = p;
 			break;
 		}
 	}
 
 	/* add the rest of the children */
-	// TODO: should I judge if p_parent is NULL?
-	for (;frame[index] && index < frame_sz;index++){
-
-		if (mode == 'k') {
-			err = ksym_addr_to_sym(ksym_tb, frame[index++], name);
-		} else if (mode == 'u') {
-			err = usym_addr_to_sym(usym_tb, frame[index++], name);
-		}
-		if (err)
-			goto return_err;
+	for (;index >= 0;--index){
+		/*if (mode == 'k') {*/
+			/*err = ksym_addr_to_sym(ksym_tb, frame[index], name);*/
+		/*} else if (mode == 'u') {*/
+			/*err = usym_addr_to_sym(usym_tb, frame[index], name);*/
+		/*}*/
+		/*if (err)*/
+			/*goto return_err;*/
 
 		struct stack_ag *tmp = malloc(sizeof(struct stack_ag));
 		if (tmp == NULL) {
@@ -170,7 +180,8 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 
 		tmp->next = NULL;
 		tmp->child = NULL;
-		strcpy(tmp->name, name);
+		// strcpy(tmp->name, name);
+		tmp->addr = frame[index];
 		tmp->cnt = sample_num;
 
 		p_parent->child = tmp;

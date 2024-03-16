@@ -1,7 +1,7 @@
 /*-*- coding:utf-8                                                          -*-│
-│vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
+│vi: set net ft=c ts=4 sts=4 sw=4 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2023 Howard Chu                                                    │
+│ Copyright 2024 Howard Chu                                                    │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -17,10 +17,29 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#ifndef SUB_COMMANDS_H
-#define SUB_COMMANDS_H
+/*
+ * Based on profile from BCC by Brendan Gregg and others.
+ */
 
-int cmd_record(int argc, char** argv);
-int cmd_stat(int argc, char **argv);
+#include "vmlinux.h"
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_core_read.h>
 
-#endif
+#include "bpf_util.h"
+#include "util.h"
+
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, u32);
+	__type(value, u64);
+	__uint(max_entries, MAX_ENTRIES);
+} stat_cnt SEC(".map");
+
+int stat(void *ctx)
+{
+	u64 zero = 0;
+	bpf_map_lookup_insert(&stat_cnt, zero);
+	return 0;
+}

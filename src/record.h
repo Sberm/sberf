@@ -20,11 +20,9 @@
 #ifndef RECORD_H
 #define RECORD_H
 
-#define TASK_COMM_LEN	 16
-#define MAX_FILENAME_LEN 127
-#define STACK_BUF_LEN 1024
-#define MAX_ENTRIES 8192
-#define MAX_PID 64
+#define TASK_COMM_LEN 16
+#define MAX_ENTRIES 10240
+#define MAX_PID 1024
 #define PERF_MAX_STACK_DEPTH 127
 
 struct key_t {

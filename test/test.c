@@ -3,7 +3,7 @@
 
 void test_ksym()
 {
-	const struct ksyms *ksym_tb = ksym_load();
+	struct ksyms *ksym_tb = ksym_load();
 	if (ksym_tb == NULL)
 		DS("Failed to load kernel symbols from test")
 
@@ -17,8 +17,8 @@ void test_ksym()
 /* test user symbol loading */
 void test_usym() 
 {
-	int pid = 1001;
-	const struct usyms *usym_tb = usym_load(pid, 1);
+	int pids[] = {1001};
+	struct usyms *usym_tb = usym_load(pids, 1);
 	if (usym_tb == NULL)
 		DS("Failed to load userspace symbols from test")
 
@@ -36,9 +36,9 @@ void test_usym()
 
 void test_addr_to_name()
 {
-	const struct ksyms* ksym_tb = ksym_load();
-	int pid = 1001;
-	const struct usyms *usym_tb = usym_load(pid, 1);
+	struct ksyms* ksym_tb = ksym_load();
+	int pids[] = {1001};
+	struct usyms *usym_tb = usym_load(pids, 1);
 
 	if (ksym_tb != NULL && usym_tb != NULL) {
 		printf("Successfully loaded\n");
@@ -75,7 +75,16 @@ void test_addr_to_name()
 
 void test_random() {
 	/* 8 8 */
-	printf("%d %d\n", sizeof(unsigned long), sizeof(unsigned long long));
+	// printf("%d %d\n", sizeof(unsigned long), sizeof(unsigned long long));
+	int len = 20;
+	char *p = malloc(len);
+	strcpy(p + 10, "fuck");
+	for (int i = 0;i < len; i++) {
+		if (p[i] == 0)
+			printf("%d", i);
+		else
+			printf("%c", p[i]);
+	} printf("\n");
 }
 
 int main() 
@@ -84,5 +93,7 @@ int main()
  	// test_usym();
 	// test_addr_to_name();
 	// test_random();
+	DS("%d\n", 1);
+	
 	return 0;
 }

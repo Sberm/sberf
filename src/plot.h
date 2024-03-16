@@ -20,8 +20,8 @@
 #ifndef PLOT_H
 #define PLOT_H
 
-#define FRAME_HEIGHT 15.0
+#define FRAME_HEIGHT 17.0
 
-void plot(struct stack_ag *p, char* name_of_plot);
+int plot(struct stack_ag *p, char* name_of_plot, pid_t* pids, int num_of_pids);
 
 #endif
