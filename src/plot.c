@@ -24,13 +24,28 @@
 #define SYM_H_NO_DEF // don't include definition of sym.h, because it is included in record.c
 #include "sym.h"
 
-static int colors[] = {
+static int blue[] = {
 	0x42E5CA,
 	0x5395E5,
 	0x69E5AA,
 	0x67BAE6,
 	0x2DC5E5,
 };
+
+static int pink[] = {
+	0xFEE3EC,
+	0xF9C5D5,
+	0xF999B7,
+	0xF2789F,
+};
+
+static int colors[] = {
+	0xFFF78A,
+	0xFFE382,
+	0xFFC47E,
+	0xFFAD84,
+};
+
 
 static const char css[] = "<style type=\"text/css\">\ntext { font-size:12px; fill:rgb(0,0,0); }\n</style>\n";
 static const char javascript[] = "<script><![CDATA[\n"
@@ -43,22 +58,20 @@ static const char javascript[] = "<script><![CDATA[\n"
 "         let text = gi.querySelector('text');\n"
 "         text.textContent = content;\n"
 "         let width = rect.width.baseVal.value;\n"
-"         let a = \"\";\n"
-"         let i = 0;\n"
 "         console.log(text.getSubStringLength(0, content.length), width);\n"
 "         if (text.getSubStringLength(0, content.length) <= width) {\n"
 "             return;\n"
 "         }\n"
-"         for (let i = content.length; i >= 0; --i) {\n"
-"             if (text.getSubStringLength(0, i) <= width) {\n"
-"                 text.textContent = content.substring(0, i);\n"
+"         for (let i = content.length - 1; i >= 0; --i) {\n"
+"             if (text.getSubStringLength(0, i + 1) <= width) {\n"
+"                 text.textContent = content.substring(0, i) + '..';\n"
 "                 return;\n"
 "             }\n"
 "         }\n"
 "         text.innerHTML = \"\";\n"
 "     });\n"
 " }\n"
-" ]]></script>\n";
+"]]></script>\n";
 
 /* kernel symbol table */
 struct ksyms* ksym_tb;
@@ -92,15 +105,19 @@ void plot_prvt(struct stack_ag* p, int p_cnt, float x, float len, int depth)
 	char frame_title[128];
 
 	/* find symbol of current frame's address */
-	if (p->addr == 0) // root
-		strcpy(frame_title, "root");
+	if (p->addr == 0) {
+		if (strlen(p->comm) == 0)
+			strcpy(frame_title, "all");
+		else
+			strcpy(frame_title, p->comm);
+	}
 	else
 		addr_to_sym(ksym_tb, usym_tb, p->addr, frame_title);
 
 	char g_str[1024];
 
 	sprintf(g_str, "<g>\n"
-	               "<title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"#%x\" rx=\"2\" ry=\"2\" />\n"
+	               "<title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\" rx=\"2\" ry=\"2\" />\n"
 	               "<text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
 	               "</g>\n", frame_title, width / max_width*100, x, y, width, height, c,
 	                      x + 0.2, y + FRAME_HEIGHT - 4);

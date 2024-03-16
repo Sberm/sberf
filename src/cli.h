@@ -19,6 +19,23 @@
 #ifndef CLI_H
 #define CLI_H
 
+struct cmd_struct {
+	const char* cmd;
+	int (*fn)(int, char**);
+};
+
+struct func_struct {
+	char opt[4];
+	int (*fn)(int, char**, int);
+};
+
+struct env_struct {
+	char opt[4];
+	void *p;
+};
+
 void parse_args(int argc, char** argv);
+int (*parse_opts_func(int argc, char** argv, int cur, struct func_struct *opts, int optc))(int argc, char** argv, int cur);
+void *parse_opts_env(int argc, char** argv, int cur, struct env_struct *envs, int envc);
 
 #endif

@@ -33,6 +33,7 @@
 #define _GNU_SOURCE
 #include <unistd.h>
 
+#include "cli.h"
 #include "sub_commands.h"
 #include "util.h"
 #include "record.skel.h"
@@ -46,15 +47,27 @@ struct ksyms* ksym_tb;
 /* user symbol table */
 struct usyms* usym_tb;
 
-/* for storing command line options */ 
 static struct {
 	int freq;
 	unsigned long long sample_freq; 
 	int plot;
-} options = {
+} env = {
 	.freq = 1,
 	.sample_freq = 3999,
 	.plot = 1,
+};
+
+int record_event(int argc, char** argv, int index);
+int record_pid(int argc, char** argv, int index);
+
+static struct func_struct record_func[] = {
+	{"-e", record_event},
+	{"-p", record_pid},
+};
+
+static struct env_struct record_pid_env[] = {
+	{"-f", &env.freq},
+	{"-p", &env.plot},
 };
 
 static void signalHandler(int signum)
@@ -171,7 +184,6 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 
 int cmd_record(int argc, char **argv)
 {
-	// TODO: stoi illegal
 	if (argc < 3) {
 		char help[] = "\n  Usage:\n"
 	                  "\n    sberf record <PID>\n\n";
@@ -179,6 +191,26 @@ int cmd_record(int argc, char **argv)
 		return 0;
 	}
 
+	int err = 0;
+	int cur = 2;
+
+	int (*funcp)(int, char**, int) = parse_opts_func(argc, argv, cur, record_func, ARRAY_LEN(record_func));
+	if (funcp) {
+		err = funcp(argc, argv, cur + 1);
+	} else { // default is recording pids
+		err = record_pid(argc, argv, cur);
+	}
+	return err;
+}
+
+int record_event(int argc, char** argv, int index)
+{
+	printf("recording events\n");
+	return 0;
+}
+
+int record_pid(int argc, char** argv, int index)
+{
 	struct record_bpf *skel;
 	int err;
 
@@ -190,13 +222,13 @@ int cmd_record(int argc, char **argv)
 
 	/* pids to trace */
 	pid_t *pids = skel->bss->pids;
-	size_t num_of_pids = split(argv[2], pids);
+	size_t num_of_pids = split(argv[index], pids);
 	// TODO: could be false
 	skel->bss->spec_pid = true;
 
-	unsigned long long freq = options.freq;
+	unsigned long long freq = env.freq;
 	// TODO: parse command
-	unsigned long long sample_freq = options.sample_freq; 
+	unsigned long long sample_freq = env.sample_freq; 
 
 	struct perf_event_attr attr = {
 		.type = PERF_TYPE_SOFTWARE,
@@ -248,7 +280,7 @@ int cmd_record(int argc, char **argv)
 	sleep(100);
 
 	/* load symbol table */
-	if (options.plot == 0) {
+	if (env.plot == 0) {
 		/* doesn't plot, just print */
 		ksym_tb = ksym_load();
 		usym_tb = usym_load(pids, num_of_pids);
@@ -261,7 +293,7 @@ int cmd_record(int argc, char **argv)
 		ksym_free(ksym_tb);
 		usym_free(usym_tb);
 
-	} else if (options.plot == 1){
+	} else if (env.plot == 1){
 		/* plot */
 		record_plot(skel->maps.stack_map, skel->maps.sample, pids, num_of_pids);
 	}
@@ -270,4 +302,6 @@ cleanup:
 	record_bpf__destroy(skel);
 
 	return 0;
+
 }
+

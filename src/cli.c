@@ -25,11 +25,6 @@
 #include "util.h"
 #include "sub_commands.h"
 
-struct cmd_struct {
-	const char* cmd;
-	int (*fn)(int, char**);
-};
-
 static struct cmd_struct commands[] = {
 	{"record", cmd_record},
 	// {"stat", cmd_stat},
@@ -40,6 +35,28 @@ void print_help() {
                           "    sberf record <PID>\n"
                           "    sberf plot <REC>\n\n";
 	printf("%s", help_message);
+}
+
+int (*parse_opts_func(int argc, char** argv, int cur, struct func_struct *opts, int optc))(int argc, char** argv, int cur)
+{
+	char* opt = argv[cur];
+	for (int j = 0;j < optc;j++) {
+		if (strcmp(opt, opts[j].opt) == 0) {
+			return opts[j].fn;
+		}
+	}
+	return NULL;
+}
+
+void *parse_opts_env(int argc, char** argv, int cur, struct env_struct *envs, int envc)
+{
+	char* opt = argv[cur];
+	for (int j = 0;j < envc;j++) {
+		if (strcmp(opt, envs[j].opt) == 0) {
+			return envs[j].p;
+		}
+	}
+	return NULL;
 }
 
 void parse_args(int argc, char** argv)

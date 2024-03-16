@@ -2,6 +2,8 @@
 <img width="200" src="images/sberf-transparent.png" /><img width="200" src="images/sberf-title.png" />
 </div>
 
+![sberf-graph](https://sberm.cn/sberf/sberf-graph.png)
+
 [![docs][s1]][l1] [![website][s2]][l2] [![version][s3]][l3] 
 
 ## Sberf

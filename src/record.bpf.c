@@ -72,36 +72,21 @@ int profile(struct bpf_perf_event_data *ctx)
 			return 0;
 	}
 
-	struct key_t key1 = {};
-	// struct key_t key2 = {};
+	struct key_t key = {};
 
-	key1.pid = pid;
-	// key2.pid = pid;
-	bpf_get_current_comm(&key1.comm, sizeof(key1.comm));
-	// bpf_get_current_comm(&key2.comm, sizeof(key2.comm));
-
-	key1.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
-	// key2.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
-
-	key1.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK);
-	// key2.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK);
+	key.pid = pid;
+	bpf_get_current_comm(&key.comm, sizeof(key.comm));
+	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
+	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK);
 
 	u64* key_samp;
-	key_samp = bpf_map_lookup_insert(&sample, &key1, &zero);
+	key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
+
 	if (key_samp)
 		__sync_fetch_and_add(key_samp, 1);
 	else {
 		bpf_printk("Failed to look up stack sample");
 		return -1;
 	}
-
-	/*key_samp = bpf_map_lookup_insert(&sample, &key2, &zero);*/
-	/*if (key_samp)*/
-		/*__sync_fetch_and_add(key_samp, 1);*/
-	/*else {*/
-		/*bpf_printk("Failed to look up stack sample");*/
-		/*return -1;*/
-	/*}*/
-
 	return 0;
 }

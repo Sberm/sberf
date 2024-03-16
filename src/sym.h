@@ -98,6 +98,8 @@ int addr_to_sym(const struct ksyms *ksym_tb, const struct usyms *usym_tb, const 
 {
 	int err1 = 0, err2 = 0;
 	err1 = ksym_addr_to_sym(ksym_tb, addr, str);
+	if (!err1)
+		return 0;
 	err2 = usym_addr_to_sym(usym_tb, addr, str);
 
 	if ((err1 && err1 != SYM_UNKNOWN)||(err2 && err2 != SYM_UNKNOWN)) {
@@ -505,8 +507,8 @@ int dso_load(struct dso *dso_p)
 		goto dso_load_cleanup;
 	}
 	if (ident[0] != 0x7f) {
-		printf("%s is not an ELF file\n", dso_p->path);
-		err = -1;
+		// printf("%s is not an ELF file\n", dso_p->path);
+		// err = -1;
 		goto dso_load_cleanup;
 	}
 	/* rewind fp */
@@ -521,8 +523,8 @@ int dso_load(struct dso *dso_p)
 			printf("Failed to parse elf file\n");
 		}
 	} else {
-		printf("32-bit ELF not supported\n");
-		err = -1;
+		// printf("32-bit ELF not supported\n");
+		// err = -1;
 	}
 
 dso_load_cleanup:
@@ -590,8 +592,9 @@ int elf_parse(FILE *fp, struct dso *dso_p)
 	}
 
 	if (i >= num) {
-		printf("No program headers\n");
-		err = -1;
+		// printf("No program headers\n");
+		// err = -1;
+		err = 0;
 		goto elf_parse_err;
 	}
 
