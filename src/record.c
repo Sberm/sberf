@@ -48,6 +48,8 @@ struct ksyms* ksym_tb;
 /* user symbol table */
 struct usyms* usym_tb;
 
+static char event_names[48][48];
+
 static struct {
 	int freq;
 	unsigned long long sample_freq; 
@@ -56,6 +58,7 @@ static struct {
 	char pids[256];
 	int all_p;
 	char svg_file_name[256];
+	char event_names_str[512];
 } env = {
 	.freq = 1,
 	.sample_freq = 3999,
@@ -63,13 +66,16 @@ static struct {
 	.pids = "\0", 
 	.all_p = 0,
 	.svg_file_name = "debug.svg",
+	.event_names_str = "\0",
 };
 
-int record_event(int argc, char** argv, int index);
+int record_syscall(int argc, char** argv, int index);
+int record_tracepoint(int argc, char** argv, int index);
 int record_pid(int argc, char** argv, int index);
 
 static struct func_struct record_func[] = {
-	{"-e", record_event},
+	{"-s", record_syscall},
+	{"-t", record_tracepoint},
 	{"-p", record_pid},
 };
 
@@ -83,6 +89,8 @@ static struct env_struct record_env[] = {
 
 static struct env_struct event_env[] = {
 	{"-p", 1, &env.pids},
+	{"-s", 1, &env.event_names_str},
+	{"-t", 1, &env.event_names_str},
 };
 
 static void signalHandler(int signum)
@@ -158,6 +166,17 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample)
 	printf("Collected %d samples\n", sample_num_total);
 }
 
+int split_env_str() {
+	char *token;
+	size_t index = 0;
+	token = strtok(env.event_names_str, ",");
+	while( token != NULL && index < ARRAY_LEN(event_names)) {
+		strcpy(event_names[index++], token);
+		token = strtok(NULL, ",");
+	}
+	return index;
+}
+
 int split(char *str, pid_t *pids) {
 	char *token;
 	pid_t pid;
@@ -165,7 +184,7 @@ int split(char *str, pid_t *pids) {
 	token = strtok(str, ",");
 	while( token != NULL && index < MAX_PID) {
 		pid = atoi(token);
-		if (pid != 0)
+		if (!(pid == 0 && strcmp(token, "0") != 0))
 			pids[index++] = pid;
 		token = strtok(NULL, ",");
 	}
@@ -177,7 +196,7 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 	struct stack_ag* stack_ag_p = stack_aggre(stack_map, sample);
 
 	if (stack_ag_p == NULL) {
-		printf("Failed to aggregate stacks\n");
+		printf("No stack data\n");
 		return -1;
 	}
 
@@ -209,18 +228,25 @@ int cmd_record(int argc, char **argv)
 
 	if (funcp) {
 		err = funcp(argc, argv, cur);
-	} else { // default is recording pids
+	} else { // default is to record pids
 		err = record_pid(argc, argv, cur);
 	}
 	return err;
 }
 
-int record_event(int argc, char** argv, int cur)
+int record_syscall(int argc, char** argv, int cur)
 {
 	struct stat_bpf *skel;
 	int err = 0;
 
 	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
+
+	int event_num = split_env_str();
+
+	printf("recording events: ");
+	for (int i = 0;i < event_num; i++)
+		printf("%s ", event_names[i]);
+	printf("\n");
 
 	skel = stat_bpf__open();
 	if (!skel) {
@@ -240,7 +266,70 @@ int record_event(int argc, char** argv, int cur)
 		goto cleanup;
 	}
 
+	/* syscall */
+	struct bpf_link *link = NULL;
+	for (int i = 0;i < event_num;i++) {
+		link = bpf_program__attach_ksyscall(skel->progs.stat_ksyscall, event_names[i], NULL);
+		if (link == NULL) {
+			printf("Failed to attach syscall %s\n", event_names[i]);
+		}
+	}
 
+	sleep(100);
+
+cleanup:
+	stat_bpf__destroy(skel);
+	return err;
+}
+
+int record_tracepoint(int argc, char** argv, int cur)
+{
+	struct stat_bpf *skel;
+	int err = 0;
+
+	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
+
+	int event_num = split_env_str();
+
+	printf("recording events: ");
+	for (int i = 0;i < event_num; i++)
+		printf("%s ", event_names[i]);
+	printf("\n");
+
+	skel = stat_bpf__open();
+	if (!skel) {
+		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
+		return 1;
+	}
+
+	err = stat_bpf__load(skel);
+	if (err) {
+		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
+		goto cleanup;
+	}
+
+	err = stat_bpf__attach(skel);
+	if (err) {
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
+
+	struct bpf_link *link = NULL;
+	for (int i = 0;i < event_num;i++) {
+		/* syscalls:sys_enter_open */
+		char *tracepoint;
+		size_t index = 0;
+
+		/* event_names[i] now is the category(syscalls), tracepoint is sys_enter_open */
+		strtok(event_names[i], ":"); tracepoint = strtok(NULL, ":");
+
+		link = bpf_program__attach_tracepoint(skel->progs.stat_tracepoint, event_names[i], tracepoint);
+		if (link == NULL) {
+			printf("Failed to attach syscall %s\n", event_names[i]);
+		}
+	}
+
+	sleep(100);
 
 cleanup:
 	stat_bpf__destroy(skel);
@@ -330,9 +419,13 @@ int record_pid(int argc, char** argv, int cur)
 		goto cleanup;
 	}
 
-	printf("Start recording pids: ");
-	for (int i = 0; i < num_of_pids; i++)
-		printf("%d ", pids[i]);
+	if (!env.all_p) {
+		printf("recording pids: ");
+		for (int i = 0; i < num_of_pids; i++)
+			printf("%d ", pids[i]);
+	} else {
+		printf("recording all processes ");
+	}
 	printf("in %d HZ\n", env.sample_freq);
 
 	/* consume sigint */

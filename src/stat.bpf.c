@@ -31,7 +31,24 @@ struct {
 	__uint(max_entries, MAX_ENTRIES);
 } stat_cnt SEC(".maps");
 
-int stat(void *ctx)
+SEC("tracepoint")
+int stat_tracepoint(void *ctx)
+{
+	bpf_printk("triggered");
+
+	u64 zero = 0;
+	u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
+	if (cnt)
+		__sync_fetch_and_add(cnt, 1);
+	else {
+		bpf_printk("Failed to look up stack sample");
+		return -1;
+	}
+	return 0;
+}
+
+SEC("ksyscall")
+int stat_ksyscall(void *ctx)
 {
 	u64 zero = 0;
 	u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
