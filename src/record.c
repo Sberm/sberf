@@ -51,16 +51,18 @@ struct usyms* usym_tb;
 static struct {
 	int freq;
 	unsigned long long sample_freq; 
-	int plot;
+	int no_plot;
 	int rec_all;
 	char pids[256];
 	int all_p;
+	char svg_file_name[256];
 } env = {
 	.freq = 1,
 	.sample_freq = 3999,
-	.plot = 1,
+	.no_plot = 0,
 	.pids = "\0", 
 	.all_p = 0,
+	.svg_file_name = "debug.svg",
 };
 
 int record_event(int argc, char** argv, int index);
@@ -73,9 +75,10 @@ static struct func_struct record_func[] = {
 
 static struct env_struct record_env[] = {
 	{"-f", 0, &env.sample_freq},
-	{"-pl", 0, &env.plot},
+	{"-np", 4, &env.no_plot},
 	{"-a", 4, &env.all_p},
 	{"-p", 1, &env.pids},
+	{"-fn", 1, &env.svg_file_name},
 };
 
 static struct env_struct event_env[] = {
@@ -178,14 +181,12 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 		return -1;
 	}
 
-	char file_name[] = "./debug.svg";
-
 	/* plot the aggregated stack */
-	if(plot(stack_ag_p, file_name, pids, num_of_pids)) {
+	if(plot(stack_ag_p, env.svg_file_name, pids, num_of_pids)) {
 		printf("Failed to plot");
 		return -1;
 	} else {
-		printf("\nPlotted to %s\n", file_name);
+		printf("\nPlotted to %s\n", env.svg_file_name);
 	}
 
 	/* free stack */
@@ -341,7 +342,7 @@ int record_pid(int argc, char** argv, int cur)
 	sleep(100);
 
 	/* load symbol table */
-	if (env.plot == 0) {
+	if (env.no_plot == 1) {
 		/* doesn't plot, just print */
 		ksym_tb = ksym_load();
 		usym_tb = usym_load(pids, num_of_pids);
@@ -354,7 +355,7 @@ int record_pid(int argc, char** argv, int cur)
 		ksym_free(ksym_tb);
 		usym_free(usym_tb);
 
-	} else if (env.plot == 1){
+	} else if (env.no_plot == 0){
 		/* plot */
 		record_plot(skel->maps.stack_map, skel->maps.sample, pids, num_of_pids);
 	}
