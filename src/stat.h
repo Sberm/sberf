@@ -20,5 +20,7 @@
 #ifndef STAT_H
 #define STAT_H
 
+#define MAX_ENTRIES 10240
+
 
 #endif

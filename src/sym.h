@@ -355,7 +355,7 @@ struct usyms* usym_load(const int *pids, int length)
 {
 	struct usyms *usym_tb = malloc(sizeof(struct usyms));
 	usym_init(usym_tb);
-	FILE* fp;
+	FILE* fp = NULL;
 	char maps_path[256];
 	int index, err;
 	unsigned long long start_addr, end_addr;
@@ -369,6 +369,8 @@ struct usyms* usym_load(const int *pids, int length)
 		/* read maps of process to get all dso */
 		sprintf(maps_path, "/proc/%d/maps", pids[i]);
 		fp = fopen(maps_path, "r");
+		if (fp == NULL)
+			continue;
 
 		index = 0;
 		while (1) {
@@ -401,11 +403,13 @@ struct usyms* usym_load(const int *pids, int length)
 		}
 	}
 
-	fclose(fp);
+	if (fp != NULL)
+		fclose(fp);
 	return usym_tb;
 
 usym_load_cleanup:
-	fclose(fp);
+	if (fp != NULL)
+		fclose(fp);
 	usym_free(usym_tb);
 	free(usym_tb);
 	usym_tb = NULL;

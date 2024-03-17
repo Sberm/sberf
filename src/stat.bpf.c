@@ -18,9 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
 #include "vmlinux.h"
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_core_read.h>
-
+#include "stat.h"
 #include "bpf_util.h"
 #include "util.h"
 
@@ -31,11 +29,17 @@ struct {
 	__type(key, u32);
 	__type(value, u64);
 	__uint(max_entries, MAX_ENTRIES);
-} stat_cnt SEC(".map");
+} stat_cnt SEC(".maps");
 
 int stat(void *ctx)
 {
 	u64 zero = 0;
-	bpf_map_lookup_insert(&stat_cnt, zero);
+	u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
+	if (cnt)
+		__sync_fetch_and_add(cnt, 1);
+	else {
+		bpf_printk("Failed to look up stack sample");
+		return -1;
+	}
 	return 0;
 }

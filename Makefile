@@ -39,7 +39,8 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 #                                                                               \_ sberf
 
 # bpf.c文件
-BPF_FILE := record.bpf.c
+BPF_FILE_ := record stat
+BPF_FILE := $(addsuffix .bpf.c, $(BPF_FILE_))
 SKEL := $(patsubst %.bpf.c, %.skel.h,$(BPF_FILE))
 SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 

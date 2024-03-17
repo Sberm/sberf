@@ -31,11 +31,12 @@ struct func_struct {
 
 struct env_struct {
 	char opt[4];
+	char type; // 0 -> int, 1 -> str, 2 -> float, 3 -> double, 4 -> itself as a value(.eg -a)
 	void *p;
 };
 
 void parse_args(int argc, char** argv);
 int (*parse_opts_func(int argc, char** argv, int cur, struct func_struct *opts, int optc))(int argc, char** argv, int cur);
-void *parse_opts_env(int argc, char** argv, int cur, struct env_struct *envs, int envc);
+void parse_opts_env(int argc, char** argv, int cur, struct env_struct *envs, int envc);
 
 #endif

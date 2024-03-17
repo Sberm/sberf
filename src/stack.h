@@ -32,9 +32,9 @@ struct stack_ag {
 
 int stack_walk(struct stack_ag* p);
 struct stack_ag *stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample);
-struct stack_ag *comm_lookup_insert(struct stack_ag* stack_ag_p, char* comm);
 int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sample_num, int frame_sz);
 void stack_free(struct stack_ag* stack_ag_p);
 int stack_get_least_sample(struct stack_ag* p);
+struct stack_ag *comm_lookup_insert(struct stack_ag *stack_ag_p, char* comm);
 
 #endif

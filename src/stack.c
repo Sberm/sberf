@@ -54,7 +54,6 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 	 */
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
-
 		if (stack_ag_p == NULL) {
 			/* initialize root stack aggregation pointer */
 			stack_ag_p = malloc(sizeof(struct stack_ag));
@@ -94,7 +93,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 	return stack_ag_p;
 }
 
-struct stack_ag *comm_lookup_insert(struct stack_ag* stack_ag_p, char* comm)
+struct stack_ag *comm_lookup_insert(struct stack_ag *stack_ag_p, char* comm)
 {
 	struct stack_ag *p, *pp, *q, *p_parent;
 	p = stack_ag_p->child;

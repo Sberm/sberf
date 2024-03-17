@@ -39,24 +39,47 @@ void print_help() {
 
 int (*parse_opts_func(int argc, char** argv, int cur, struct func_struct *opts, int optc))(int argc, char** argv, int cur)
 {
-	char* opt = argv[cur];
-	for (int j = 0;j < optc;j++) {
-		if (strcmp(opt, opts[j].opt) == 0) {
-			return opts[j].fn;
+	for (int i = cur;i < argc;i++) {
+		char* opt = argv[i];
+		for (int j = 0;j < optc;j++) {
+			if (strcmp(opt, opts[j].opt) == 0) {
+				return opts[j].fn;
+			}
 		}
 	}
 	return NULL;
 }
 
-void *parse_opts_env(int argc, char** argv, int cur, struct env_struct *envs, int envc)
+void parse_opts_env(int argc, char** argv, int cur, struct env_struct *envs, int envc)
 {
-	char* opt = argv[cur];
-	for (int j = 0;j < envc;j++) {
-		if (strcmp(opt, envs[j].opt) == 0) {
-			return envs[j].p;
+	for (int i = cur;i < argc;i++) {
+		char* opt = argv[i];
+		for (int j = 0;j < envc;j++) {
+			if (strcmp(opt, envs[j].opt) == 0)
+				if (envs[j].type == 4)
+					*((int *)envs[j].p) = 1;
+			else if (strcmp(opt, envs[j].opt) == 0 && ++i < argc) {
+				opt = argv[i];
+				switch (envs[j].type) {
+				case 0:
+					*((int *)envs[j].p) = atoi(opt);
+					break;
+				case 1:
+					strcpy(envs[j].p, opt);
+					break;
+				case 2:
+					*((float *)envs[j].p) = atof(opt);
+					break;
+				case 3:
+					*((double *)envs[j].p) = strtod(opt, NULL);
+					break;
+				default:
+					printf("Illegal type when parsing options\n");
+					break;
+				}
+			}
 		}
 	}
-	return NULL;
 }
 
 void parse_args(int argc, char** argv)

@@ -37,6 +37,7 @@
 #include "sub_commands.h"
 #include "util.h"
 #include "record.skel.h"
+#include "stat.skel.h"
 #include "record.h"
 #include "stack.h"
 #include "sym.h"
@@ -51,10 +52,15 @@ static struct {
 	int freq;
 	unsigned long long sample_freq; 
 	int plot;
+	int rec_all;
+	char pids[256];
+	int all_p;
 } env = {
 	.freq = 1,
 	.sample_freq = 3999,
 	.plot = 1,
+	.pids = "\0", 
+	.all_p = 0,
 };
 
 int record_event(int argc, char** argv, int index);
@@ -65,9 +71,15 @@ static struct func_struct record_func[] = {
 	{"-p", record_pid},
 };
 
-static struct env_struct record_pid_env[] = {
-	{"-f", &env.freq},
-	{"-p", &env.plot},
+static struct env_struct record_env[] = {
+	{"-f", 0, &env.sample_freq},
+	{"-pl", 0, &env.plot},
+	{"-a", 4, &env.all_p},
+	{"-p", 1, &env.pids},
+};
+
+static struct env_struct event_env[] = {
+	{"-p", 1, &env.pids},
 };
 
 static void signalHandler(int signum)
@@ -166,8 +178,6 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 		return -1;
 	}
 
-	// printf("Walked %d stack frames\n", stack_walk(stack_ag_p));
-	
 	char file_name[] = "./debug.svg";
 
 	/* plot the aggregated stack */
@@ -195,24 +205,53 @@ int cmd_record(int argc, char **argv)
 	int cur = 2;
 
 	int (*funcp)(int, char**, int) = parse_opts_func(argc, argv, cur, record_func, ARRAY_LEN(record_func));
+
 	if (funcp) {
-		err = funcp(argc, argv, cur + 1);
+		err = funcp(argc, argv, cur);
 	} else { // default is recording pids
 		err = record_pid(argc, argv, cur);
 	}
 	return err;
 }
 
-int record_event(int argc, char** argv, int index)
+int record_event(int argc, char** argv, int cur)
 {
-	printf("recording events\n");
-	return 0;
+	struct stat_bpf *skel;
+	int err = 0;
+
+	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
+
+	skel = stat_bpf__open();
+	if (!skel) {
+		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
+		return 1;
+	}
+
+	err = stat_bpf__load(skel);
+	if (err) {
+		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
+		goto cleanup;
+	}
+
+	err = stat_bpf__attach(skel);
+	if (err) {
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
+
+
+
+cleanup:
+	stat_bpf__destroy(skel);
+	return err;
 }
 
-int record_pid(int argc, char** argv, int index)
+int record_pid(int argc, char** argv, int cur)
 {
 	struct record_bpf *skel;
-	int err;
+	int err = 0;
+
+	parse_opts_env(argc, argv, cur, record_env, ARRAY_LEN(record_env));
 
 	skel = record_bpf__open();
 	if (!skel) {
@@ -222,9 +261,14 @@ int record_pid(int argc, char** argv, int index)
 
 	/* pids to trace */
 	pid_t *pids = skel->bss->pids;
-	size_t num_of_pids = split(argv[index], pids);
-	// TODO: could be false
-	skel->bss->spec_pid = true;
+	size_t num_of_pids = split(env.pids, pids);
+	skel->bss->spec_pid = !env.all_p; // if to record all process(all_p = 1), specific pid(spec_pid) is 0
+	
+
+	/* sberf record 1001 is also legal */
+	if (!env.all_p && strlen(env.pids) == 0) {
+		num_of_pids = split(argv[2], pids);
+	}
 
 	unsigned long long freq = env.freq;
 	// TODO: parse command
@@ -262,6 +306,23 @@ int record_pid(int argc, char** argv, int index)
 		}
 	}
 
+	/* record all process */
+	if (env.all_p){ 
+		// TODO: all cpu
+		int cpu_cnt = 1;
+		for (int i = 0;i < cpu_cnt;i++) {
+			fd = syscall(__NR_perf_event_open, &attr, -1, i, -1, PERF_FLAG_FD_CLOEXEC);
+			if (fd < 0) {
+				printf("Failed to open perf event for all process\n");
+			}
+			link =  bpf_program__attach_perf_event(skel->progs.profile, fd);
+			if (link == NULL) {
+				printf("Failed to attach bpf program for all process\n");
+				goto cleanup;
+			}
+		}
+	}
+
 	err = record_bpf__attach(skel);
 	if (err) {
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
@@ -271,7 +332,7 @@ int record_pid(int argc, char** argv, int index)
 	printf("Start recording pids: ");
 	for (int i = 0; i < num_of_pids; i++)
 		printf("%d ", pids[i]);
-	printf("\n");
+	printf("in %d HZ\n", env.sample_freq);
 
 	/* consume sigint */
 	signal(SIGINT, signalHandler);
@@ -300,8 +361,6 @@ int record_pid(int argc, char** argv, int index)
 
 cleanup:
 	record_bpf__destroy(skel);
-
-	return 0;
-
+	return err;
 }
 

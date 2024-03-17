@@ -21,8 +21,7 @@
 #define UTIL_H
 
 #define DB printf("[Debug]\n");
-// #define DS(s) printf("[Debug] " #s "\n");
-#define DS(fmt, args...) printf(fmt, ##args);
+#define DS(fmt, args...) printf(fmt, ##args), printf("\n");
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
 
 /* avoid double evaluation */

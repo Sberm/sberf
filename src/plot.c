@@ -142,7 +142,7 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 {
 	if (p == NULL)
 		return -1;
-
+	
 	/* symbol table */
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);
