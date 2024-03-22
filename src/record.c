@@ -38,6 +38,7 @@
 #include "util.h"
 #include "record.skel.h"
 #include "stat.skel.h"
+#include "mem.skel.h"
 #include "record.h"
 #include "stack.h"
 #include "sym.h"
@@ -61,7 +62,7 @@ static struct {
 	char event_names_str[512];
 } env = {
 	.freq = 1,
-	.sample_freq = 3999,
+	.sample_freq = 69,
 	.no_plot = 0,
 	.pids = "\0", 
 	.all_p = 0,
@@ -69,14 +70,11 @@ static struct {
 	.event_names_str = "\0",
 };
 
-int record_syscall(int argc, char** argv, int index);
-int record_tracepoint(int argc, char** argv, int index);
-int record_pid(int argc, char** argv, int index);
-
 static struct func_struct record_func[] = {
 	{"-s", record_syscall},
 	{"-t", record_tracepoint},
 	{"-p", record_pid},
+	{"-m", record_mem},
 };
 
 static struct env_struct record_env[] = {
@@ -91,6 +89,15 @@ static struct env_struct event_env[] = {
 	{"-p", 1, &env.pids},
 	{"-s", 1, &env.event_names_str},
 	{"-t", 1, &env.event_names_str},
+	{"-rt", 1, &env.event_names_str},
+};
+
+static struct env_struct mem_env[] = {
+	{"-f", 0, &env.sample_freq},
+	{"-np", 4, &env.no_plot},
+	{"-a", 4, &env.all_p},
+	{"-p", 1, &env.pids},
+	{"-fn", 1, &env.svg_file_name},
 };
 
 static void signalHandler(int signum)
@@ -166,7 +173,7 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample)
 	printf("Collected %d samples\n", sample_num_total);
 }
 
-int split_env_str() {
+int split_event_str() {
 	char *token;
 	size_t index = 0;
 	token = strtok(env.event_names_str, ",");
@@ -241,7 +248,7 @@ int record_syscall(int argc, char** argv, int cur)
 
 	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
 
-	int event_num = split_env_str();
+	int event_num = split_event_str();
 
 	printf("recording events: ");
 	for (int i = 0;i < event_num; i++)
@@ -289,7 +296,7 @@ int record_tracepoint(int argc, char** argv, int cur)
 
 	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
 
-	int event_num = split_env_str();
+	int event_num = split_event_str();
 
 	printf("recording events: ");
 	for (int i = 0;i < event_num; i++)
@@ -353,7 +360,6 @@ int record_pid(int argc, char** argv, int cur)
 	pid_t *pids = skel->bss->pids;
 	size_t num_of_pids = split(env.pids, pids);
 	skel->bss->spec_pid = !env.all_p; // if to record all process(all_p = 1), specific pid(spec_pid) is 0
-	
 
 	/* sberf record 1001 is also legal */
 	if (!env.all_p && strlen(env.pids) == 0) {
@@ -458,3 +464,44 @@ cleanup:
 	return err;
 }
 
+int record_mem(int argc, char** argv, int cur)
+{
+	struct mem_bpf *skel;
+	int err = 0;
+
+	parse_opts_env(argc, argv, cur, mem_env, ARRAY_LEN(record_env));
+
+	skel = mem_bpf__open();
+	if (!skel) {
+		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
+		return 1;
+	}
+
+	/* pids to trace */
+	pid_t *pids = skel->bss->pids;
+	size_t num_of_pids = split(env.pids, pids);
+	skel->bss->spec_pid = !env.all_p; // if to record all process(all_p = 1), specific pid(spec_pid) is 0
+
+	struct bpf_link *link = NULL;
+	link = bpf_program__attach_ksyscall(skel->progs.mem_profile, "mmap", NULL);
+
+	err = mem_bpf__load(skel);
+	if (err) {
+		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
+		goto cleanup;
+	}
+
+	err = mem_bpf__attach(skel);
+	if (err) {
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
+
+
+	sleep(100);
+
+cleanup:
+	mem_bpf__destroy(skel);
+	return err;
+	return 0;
+}

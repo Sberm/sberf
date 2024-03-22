@@ -32,4 +32,9 @@ struct key_t {
 	char comm[TASK_COMM_LEN];
 };
 
+int record_syscall(int argc, char** argv, int index);
+int record_tracepoint(int argc, char** argv, int index);
+int record_pid(int argc, char** argv, int index);
+int record_mem(int argc, char** argv, int cur);
+
 #endif

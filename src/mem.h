@@ -17,47 +17,10 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#include "vmlinux.h"
-#include "stat.h"
-#include "bpf_util.h"
-#include "util.h"
+#ifndef MEM_H
+#define MEM_H
 
-char LICENSE[] SEC("license") = "Dual BSD/GPL";
+#define MAX_ENTRIES 10240
+#define MAX_PID 1024
 
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__type(key, u32);
-	__type(value, u64);
-	__uint(max_entries, MAX_ENTRIES);
-} stat_cnt SEC(".maps");
-
-SEC("tracepoint")
-int stat_tracepoint(void *ctx)
-{
-	bpf_printk("triggered");
-
-	u64 zero = 0;
-	u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
-	if (cnt)
-		__sync_fetch_and_add(cnt, 1);
-	else {
-		bpf_printk("Failed to look up stack sample");
-		return -1;
-	}
-	return 0;
-}
-
-SEC("ksyscall")
-int stat_ksyscall(void *ctx)
-{
-	bpf_printk("triggered");
-	u64 zero = 0;
-	u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
-	if (cnt)
-		__sync_fetch_and_add(cnt, 1);
-	else {
-		bpf_printk("Failed to look up stack sample");
-		return -1;
-	}
-	return 0;
-}
+#endif

@@ -18,46 +18,57 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
 #include "vmlinux.h"
-#include "stat.h"
+#include "mem.h"
 #include "bpf_util.h"
 #include "util.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
+// specific pid
+volatile bool spec_pid = 0;
+volatile pid_t pids[MAX_PID] = {0};
+
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
 	__type(key, u32);
-	__type(value, u64);
-	__uint(max_entries, MAX_ENTRIES);
-} stat_cnt SEC(".maps");
+} stack_map SEC(".maps");
 
-SEC("tracepoint")
-int stat_tracepoint(void *ctx)
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, u32);
+    __type(value, u32);
+    __uint(max_entries, MAX_ENTRIES);
+} mem_usage SEC(".maps");
+
+SEC("kprobe")
+int mem_profile(void *ctx)
 {
-	bpf_printk("triggered");
+	u64 id = bpf_get_current_pid_tgid();
+	u32 pid = id >> 32;
 
-	u64 zero = 0;
-	u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
-	if (cnt)
-		__sync_fetch_and_add(cnt, 1);
-	else {
-		bpf_printk("Failed to look up stack sample");
-		return -1;
+	// if to trace only specific pids
+	if (spec_pid) {
+		int i;
+		for (i = 0;i < ARRAY_LEN(pids); i++) {
+			if (pids[i] == 0)
+				return 0;
+			if (pids[i] == pid)
+				break;
+		}
+		/* didn't match through the whole pids array */
+		if (i == ARRAY_LEN(pids))
+			return 0;
 	}
-	return 0;
-}
 
-SEC("ksyscall")
-int stat_ksyscall(void *ctx)
-{
-	bpf_printk("triggered");
-	u64 zero = 0;
-	u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
-	if (cnt)
-		__sync_fetch_and_add(cnt, 1);
-	else {
-		bpf_printk("Failed to look up stack sample");
-		return -1;
-	}
+	bpf_printk("mem triggered");
+	/*u64 zero = 0;*/
+	// u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
+
+	/*if (cnt)*/
+		/*__sync_fetch_and_add(cnt, 1);*/
+	/*else {*/
+		/*bpf_printk("Failed to look up stack sample");*/
+		/*return -1;*/
+	/*}*/
 	return 0;
 }
