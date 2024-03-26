@@ -53,7 +53,7 @@ INCLUDE := -Ivmlinux -Isrc -I/usr/include
 # bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
 # llvm-strip去除tmp.bpf.o中的DWARF信息
 # bpftool生成bpf.o
-$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(wildcard %.h) $(VMLINUX) $(UTILS) | $(SKEL_DIR)
+$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(SRCDIR)/$(wildcard %.h) $(VMLINUX) $(UTILS) | $(SKEL_DIR)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
 		-Ivmlinux -c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
@@ -67,7 +67,7 @@ $(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
 # .c --GCC--> .o
-$(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(wildcard %.h) $(UTILS) | $(OUTPUT)
+$(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(SRCDIR)/$(wildcard %.h) $(UTILS) | $(OUTPUT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
 

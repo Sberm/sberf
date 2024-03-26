@@ -40,7 +40,7 @@ struct {
     __uint(max_entries, MAX_ENTRIES);
 } mem_usage SEC(".maps");
 
-SEC("kprobe")
+SEC("tp_btf/sys_enter_mmap")
 int mem_profile(void *ctx)
 {
 	u64 id = bpf_get_current_pid_tgid();
@@ -61,14 +61,5 @@ int mem_profile(void *ctx)
 	}
 
 	bpf_printk("mem triggered");
-	/*u64 zero = 0;*/
-	// u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
-
-	/*if (cnt)*/
-		/*__sync_fetch_and_add(cnt, 1);*/
-	/*else {*/
-		/*bpf_printk("Failed to look up stack sample");*/
-		/*return -1;*/
-	/*}*/
 	return 0;
 }

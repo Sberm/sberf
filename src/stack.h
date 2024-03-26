@@ -36,5 +36,6 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 void stack_free(struct stack_ag* stack_ag_p);
 int stack_get_least_sample(struct stack_ag* p);
 struct stack_ag *comm_lookup_insert(struct stack_ag *stack_ag_p, char* comm);
+int stack_get_depth(struct stack_ag* p);
 
 #endif

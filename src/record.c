@@ -109,13 +109,13 @@ int print_stack_frame(unsigned long long *frame, int sample_num, char mode)
 	char name[128];
 	if (mode == 'k') {
 		printf("[kernel] %d samples:\n", sample_num);
-		for (int i = 0; frame[i] && i < PERF_MAX_STACK_DEPTH; i++) {
+		for (int i = 0; frame[i] && i < MAX_STACK_DEPTH; i++) {
 			ksym_addr_to_sym(ksym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}
 	} else if (mode == 'u') {
 		printf("[user] %d samples:\n", sample_num);
-		for (int i = 0; frame[i] && i < PERF_MAX_STACK_DEPTH; i++) {
+		for (int i = 0; frame[i] && i < MAX_STACK_DEPTH; i++) {
 			usym_addr_to_sym(usym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}
@@ -134,7 +134,7 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample)
 	struct key_t *last_key = &a;
 	struct key_t *cur_key = &b;
 
-	unsigned long long *frame = calloc(PERF_MAX_STACK_DEPTH, sizeof(unsigned long long));
+	unsigned long long *frame = calloc(MAX_STACK_DEPTH, sizeof(unsigned long long));
 	int err;
 
 	int sample_num = 0;
@@ -378,7 +378,7 @@ int record_pid(int argc, char** argv, int cur)
 	};
 
 	// TODO: change value
-	bpf_map__set_value_size(skel->maps.stack_map, PERF_MAX_STACK_DEPTH * sizeof(unsigned long long));
+	bpf_map__set_value_size(skel->maps.stack_map, MAX_STACK_DEPTH * sizeof(unsigned long long));
 	bpf_map__set_max_entries(skel->maps.stack_map, MAX_ENTRIES);
 
 	err = record_bpf__load(skel);

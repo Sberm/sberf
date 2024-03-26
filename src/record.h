@@ -23,7 +23,7 @@
 #define TASK_COMM_LEN 16
 #define MAX_ENTRIES 10240
 #define MAX_PID 1024
-#define PERF_MAX_STACK_DEPTH 127
+#define MAX_STACK_DEPTH 64
 
 struct key_t {
 	__u32 pid;

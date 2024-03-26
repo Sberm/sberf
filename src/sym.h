@@ -662,6 +662,7 @@ int elf_parse(FILE *fp, struct dso *dso_p)
 				if (fgets(fname, sizeof(fname), fp) == NULL)
 					continue;
 				faddr = faddr - p_vaddr + dso_p->offset;
+				// TODO: too much reallocating, change the way to reallocate
 				dso_p->sym = realloc(dso_p->sym, sizeof(struct dso_sym) * (dso_p->length + 1));
 				if (dso_p->sym == NULL)  {
 					printf("Failed to add symbol to dso %s\n", dso_p->path);

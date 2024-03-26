@@ -46,7 +46,6 @@ static int colors[] = {
 	0xFFAD84,
 };
 
-
 static const char css[] = "<style type=\"text/css\">\ntext { font-size:12px; fill:rgb(0,0,0); }\n</style>\n";
 static const char javascript[] = "<script><![CDATA[\n"
 " function main(evt) {\n"
@@ -84,8 +83,8 @@ int svg_sz = 65536;
 int svg_index = 0;
 char* svg_str;
 
-float max_width = 1200;
-float max_height = 1700;
+const float max_width = 1200;
+float max_height = 0;
 
 const float x_st = 10;
 const int depth_st = 0;
@@ -116,11 +115,11 @@ void plot_prvt(struct stack_ag* p, int p_cnt, float x, float len, int depth)
 
 	char g_str[1024];
 
-	sprintf(g_str, "<g>\n"
-	               "<title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\" rx=\"2\" ry=\"2\" />\n"
-	               "<text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
-	               "</g>\n", frame_title, width / max_width*100, x, y, width, height, c,
-	                      x + 0.2, y + FRAME_HEIGHT - 4);
+	snprintf(g_str, sizeof(g_str), " <g>\n"
+	                               " <title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\" rx=\"2\" ry=\"2\" />\n"
+	                               " <text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
+	                               " </g>\n", frame_title, width / max_width*100, x, y, width, height, c,
+	                                          x + 0.2, y + FRAME_HEIGHT - 4);
 
 	/* realloc just like a stl vector */
 	if (svg_index + strlen(g_str) >= svg_sz) {
@@ -142,7 +141,9 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 {
 	if (p == NULL)
 		return -1;
-	
+
+	max_height = stack_get_depth(p) * FRAME_HEIGHT;
+
 	/* symbol table */
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);

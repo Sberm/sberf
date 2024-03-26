@@ -43,7 +43,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 	struct key_t *last_key = &a;
 	struct key_t *cur_key = &b;
 
-	unsigned long long *frame = calloc(PERF_MAX_STACK_DEPTH, sizeof(unsigned long long));
+	unsigned long long *frame = calloc(MAX_STACK_DEPTH, sizeof(unsigned long long));
 	int err;
 	int sample_num = 0;
 
@@ -74,7 +74,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 			else {
 				stack_ag_p->cnt += sample_num;
 				comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
-				stack_insert(comm_p, frame, sample_num, PERF_MAX_STACK_DEPTH);
+				stack_insert(comm_p, frame, sample_num, MAX_STACK_DEPTH);
 			}
 		}
 
@@ -84,7 +84,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 		else {
 			stack_ag_p->cnt += sample_num;
 			comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
-			stack_insert(comm_p, frame, sample_num, PERF_MAX_STACK_DEPTH);
+			stack_insert(comm_p, frame, sample_num, MAX_STACK_DEPTH);
 		}
 
 		last_key = cur_key;
@@ -224,6 +224,25 @@ void stack_free(struct stack_ag* p) {
 	stack_free(p->next);
 	stack_free(p->child);
 	free(p);
+}
+
+static unsigned depth = 1;
+
+void stack_get_depth_prvt(struct stack_ag* p, unsigned d)
+{
+	if (p == NULL) {
+		depth = max(depth, d - 1);
+		return;
+	}
+	stack_get_depth_prvt(p->child, d + 1);
+	stack_get_depth_prvt(p->next, d);
+}
+
+int stack_get_depth(struct stack_ag* p)
+{
+	depth = 1;
+	stack_get_depth_prvt(p, depth);
+	return depth;
 }
 
 int stack_get_least_sample(struct stack_ag* p) {
