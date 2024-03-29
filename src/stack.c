@@ -17,7 +17,6 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-// #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 #include "stack.h"
 #include "record.skel.h"
