@@ -141,7 +141,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 	int err = 0;
 
 	if (stack_ag_p == NULL) {
-		printf("No stacks to aggregate\n");
+		printf("No stacks sample found\n");
 		err = -1;
 		goto return_err;
 	}
