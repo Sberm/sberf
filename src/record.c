@@ -481,15 +481,18 @@ int record_mem(int argc, char** argv, int cur)
 	pid_t *pids = skel->bss->pids;
 	size_t num_of_pids = split(env.pids, pids);
 	skel->bss->spec_pid = !env.all_p; // if to record all process(all_p = 1), specific pid(spec_pid) is 0
-
-	struct bpf_link *link = NULL;
-	link = bpf_program__attach_ksyscall(skel->progs.mem_profile, "mmap", NULL);
+	
+	bpf_map__set_value_size(skel->maps.stack_map, MAX_STACK_DEPTH * sizeof(unsigned long long));
+	bpf_map__set_max_entries(skel->maps.stack_map, MAX_ENTRIES);
 
 	err = mem_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
 	}
+
+	// struct bpf_link *link = NULL;
+	// link = bpf_program__attach_ksyscall(skel->progs.mem_profile, "mmap", NULL);
 
 	err = mem_bpf__attach(skel);
 	if (err) {

@@ -40,8 +40,15 @@ struct {
     __uint(max_entries, MAX_ENTRIES);
 } mem_usage SEC(".maps");
 
+#define MAX_RAW_SYSCALL_ARGS
+
+struct arg {
+	int syscall_nr;
+	unsigned long args[MAX_RAW_SYSCALL_ARGS];
+};
+
 SEC("tp_btf/sys_enter_mmap")
-int mem_profile(void *ctx)
+int mem_profile(struct arg* args)
 {
 	u64 id = bpf_get_current_pid_tgid();
 	u32 pid = id >> 32;
@@ -60,6 +67,8 @@ int mem_profile(void *ctx)
 			return 0;
 	}
 
-	bpf_printk("mem triggered");
+	
+	bpf_printk("allocated %dKB", args->args[1] / 1000);
+
 	return 0;
 }
