@@ -491,9 +491,6 @@ int record_mem(int argc, char** argv, int cur)
 		goto cleanup;
 	}
 
-	// struct bpf_link *link = NULL;
-	// link = bpf_program__attach_ksyscall(skel->progs.mem_profile, "mmap", NULL);
-
 	err = mem_bpf__attach(skel);
 	if (err) {
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
