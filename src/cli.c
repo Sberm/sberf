@@ -30,7 +30,8 @@ static struct cmd_struct commands[] = {
 	// {"stat", cmd_stat},
 };
 
-void print_help() {
+void print_help()
+{
 	char help_message[] = "\n  Usage:\n\n"
                           "    sberf record <PID>\n"
 	                      "\n";
@@ -84,11 +85,6 @@ void parse_opts_env(int argc, char** argv, int cur, struct env_struct *envs, int
 
 void parse_args(int argc, char** argv)
 {
-	if (argc < 2) {
-		print_help();
-		return;
-	}
-
 	int parse_flag = 0;
 	for (int i = 0;i < ARRAY_LEN(commands); i++) {
 		if (strcmp(commands[i].cmd, argv[1]) == 0) {

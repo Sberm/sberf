@@ -24,6 +24,7 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
+// TODO: change it to maps
 // specific pid
 volatile bool spec_pid = 0;
 volatile pid_t pids[MAX_PID] = {0};

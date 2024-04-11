@@ -72,6 +72,7 @@ static struct func_struct record_func[] = {
 	{"-m", record_mem},
 };
 
+// TODO: refactor, delete the duplicates
 static struct env_struct record_env[] = {
 	{"-f", 0, &env.sample_freq},
 	{"-np", 4, &env.no_plot},
@@ -81,10 +82,13 @@ static struct env_struct record_env[] = {
 };
 
 static struct env_struct event_env[] = {
+	{"-f", 0, &env.sample_freq},
+	{"-np", 4, &env.no_plot},
+	{"-a", 4, &env.all_p},
 	{"-p", 1, &env.pids},
+	{"-fn", 1, &env.svg_file_name},
 	{"-s", 1, &env.event_names_str},
 	{"-t", 1, &env.event_names_str},
-	{"-rt", 1, &env.event_names_str},
 };
 
 static struct env_struct mem_env[] = {
@@ -214,12 +218,29 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 	stack_free(stack_ag_p);
 }
 
+void print_help_record()
+{
+	char help[] = "\n  Usage:\n\n"
+	              "    sberf record [Options]\n\n"
+	              "  Options:\n\n"
+	              "  For record in general (-p/-s/-t/-m):\n"
+	              "    -f: Frequency in Hz\n"
+	              "    -np: No plotting, print the stacks instead\n"
+	              "    -a: Trace all processes\n"
+	              "    -p: Pid to trace\n"
+	              "    -fn: File name for the plot\n\n"
+	              "  For record -t (tracepoint):\n"
+	              "    -s: Name of the system call\n"
+	              "    -t: Name of the tracepoint\n"
+	              "\n";
+
+	printf("%s", help);
+}
+
 int cmd_record(int argc, char **argv)
 {
 	if (argc < 3) {
-		char help[] = "\n  Usage:\n"
-	                  "\n    sberf record <PID>\n\n";
-		printf("%s", help);
+		print_help_record();
 		return 0;
 	}
 
