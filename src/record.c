@@ -152,7 +152,7 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 
 		/* stack frame */
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kern_stack_id, frame);
-		/* kernel stack not available */
+		/* kernel stack not  available */
 		if (cur_key->kern_stack_id != -EFAULT) {
 			if (err)
 				printf("\n[kernel stack lost]\n");
