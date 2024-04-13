@@ -48,7 +48,7 @@ struct arg {
 	unsigned long args[MAX_RAW_SYSCALL_ARGS];
 };
 
-SEC("tp_btf/sys_enter_mmap")
+SEC("tp/syscalls/sys_enter_mmap")
 int mem_profile(struct arg* args)
 {
 	u64 id = bpf_get_current_pid_tgid();
