@@ -223,15 +223,14 @@ void print_help_record()
 	char help[] = "\n  Usage:\n\n"
 	              "    sberf record [Options]\n\n"
 	              "  Options:\n\n"
-	              "  For record in general (-p/-s/-t/-m):\n"
+	              "    -p: Pid to trace\n"
+	              "    -t: Name of the tracepoint\n"
+	              "    -s: Name of the syscall\n"
+	              "    -m: Record memory usage\n"
 	              "    -f: Frequency in Hz\n"
 	              "    -np: No plotting, print the stacks instead\n"
 	              "    -a: Trace all processes\n"
-	              "    -p: Pid to trace\n"
 	              "    -fn: File name for the plot\n\n"
-	              "  For record -t (tracepoint):\n"
-	              "    -s: Name of the system call\n"
-	              "    -t: Name of the tracepoint\n"
 	              "\n";
 
 	printf("%s", help);
