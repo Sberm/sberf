@@ -55,7 +55,10 @@ SEC("ksyscall")
 int tracepoint(void *ctx)
 {
 	u64 tgid = bpf_get_current_pid_tgid();
-	
+	int pid = tgid >> 32;
+
+	if (!bpf_map_lookup_elem(&task_filter, &pid))
+		return 0;
 
 	int zero = 0, len = 0;
 	struct stack_array *sa = bpf_map_lookup_elem(&stacks, &zero);

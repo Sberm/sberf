@@ -45,6 +45,9 @@
 #include "plot.h"
 #include "event.h"
 
+static struct ksyms *record__ksym_tb;
+static struct usyms *record__usym_tb;
+
 static char event_names[48][48];
 
 static struct {
@@ -74,6 +77,7 @@ static struct func_struct record_func[] = {
 };
 
 // TODO: refactor, delete the duplicates
+// TODO: change them to enums
 static struct env_struct record_env[] = {
 	{"-f", 0, &env.sample_freq},
 	{"-np", 4, &env.no_plot},
@@ -187,7 +191,7 @@ int split_event_str() {
 	return index;
 }
 
-int split(char *str, pid_t *pids) {
+int split_pid(char *str, pid_t *pids) {
 	char *token;
 	pid_t pid;
 	size_t index = 0;
@@ -201,7 +205,7 @@ int split(char *str, pid_t *pids) {
 	return index;
 }
 
-int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, int num_of_pids) {
+int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, int pid_nr) {
 	/* aggregate stack samples */
 	struct stack_ag* stack_ag_p = stack_aggre(stack_map, sample);
 
@@ -211,7 +215,7 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 	}
 
 	/* plot the aggregated stack */
-	if(plot(stack_ag_p, env.svg_file_name, pids, num_of_pids)) {
+	if(plot(stack_ag_p, env.svg_file_name, pids, pid_nr)) {
 		printf("Failed to plot");
 		return -1;
 	} else {
@@ -263,24 +267,33 @@ int cmd_record(int argc, char **argv)
 void syscall_handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
 	struct stack_array *sa = data;
+	char name[128];
 	for (int i = 0;i < data_sz / sizeof(unsigned long) && sa->array[i];i++) {
-		printf("%lx\n", sa->array[i]);
+		usym_addr_to_sym(record__usym_tb, sa->array[i], name);
+		printf("%lx %s\n", sa->array[i], name);
 	}
+	printf("\n\n");
 }
 
 int record_syscall(int argc, char** argv, int cur)
 {
 	struct event_bpf *skel;
-	int err = 0;
-	int event_num;
+	int err = 0, event_num, fd, one = 1;
 	struct perf_buffer *pb = NULL;
 	struct perf_buffer_opts pb_opts = {};
 
 	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
 
+	pid_t pids[MAX_PID];
+	size_t pid_nr = split_pid(env.pids, pids);
+
 	event_num = split_event_str();
 
-	printf("recording events: ");
+	if (event_num > 1)
+		printf("recording events: ");
+	else
+		printf("recording event: ");
+
 	for (int i = 0;i < event_num; i++)
 		printf("%s ", event_names[i]);
 	printf("\n");
@@ -296,6 +309,15 @@ int record_syscall(int argc, char** argv, int cur)
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
 	}
+
+	fd = bpf_map__fd(skel->maps.task_filter);
+
+	for (int i = 0;i < pid_nr;i++) {
+		bpf_map_update_elem(fd, &pids[i], &one, BPF_ANY);
+	}
+
+	record__ksym_tb = ksym_load();
+	record__usym_tb = usym_load(pids, pid_nr);
 
 	err = event_bpf__attach(skel);
 	if (err) {
@@ -402,12 +424,12 @@ int record_pid(int argc, char** argv, int cur)
 
 	/* pids to trace */
 	pid_t *pids = skel->bss->pids;
-	size_t num_of_pids = split(env.pids, pids);
+	size_t pid_nr = split_pid(env.pids, pids);
 	skel->bss->spec_pid = !env.all_p; // if to record all process(all_p = 1), specific pid(spec_pid) is 0
 
 	/* sberf record 1001 is also legal */
 	if (!env.all_p && strlen(env.pids) == 0) {
-		num_of_pids = split(argv[2], pids);
+		pid_nr = split_pid(argv[2], pids);
 	}
 
 	unsigned long long freq = env.freq;
@@ -434,7 +456,7 @@ int record_pid(int argc, char** argv, int cur)
 	int fd;
 	struct bpf_link* link;
 	/* open on any cpu */
-	for (int i = 0;i < num_of_pids; i++) {
+	for (int i = 0;i < pid_nr; i++) {
 		fd = syscall(__NR_perf_event_open, &attr, pids[i], -1, -1, PERF_FLAG_FD_CLOEXEC);
 		if (fd < 0) {
 			printf("Failed to open perf event for pid %d\n", pids[i]);
@@ -471,7 +493,7 @@ int record_pid(int argc, char** argv, int cur)
 
 	if (!env.all_p) {
 		printf("recording pids: ");
-		for (int i = 0; i < num_of_pids; i++)
+		for (int i = 0; i < pid_nr; i++)
 			printf("%d ", pids[i]);
 	} else {
 		printf("recording all processes ");
@@ -493,7 +515,7 @@ int record_pid(int argc, char** argv, int cur)
 	if (env.no_plot == 1) {
 		/* doesn't plot, just print */
 		ksym_tb = ksym_load();
-		usym_tb = usym_load(pids, num_of_pids);
+		usym_tb = usym_load(pids, pid_nr);
 
 		if (ksym_tb && usym_tb)
 			printf("\nSymbols loaded\n");
@@ -505,7 +527,7 @@ int record_pid(int argc, char** argv, int cur)
 
 	} else if (env.no_plot == 0){
 		/* plot */
-		record_plot(skel->maps.stack_map, skel->maps.sample, pids, num_of_pids);
+		record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
 	}
 
 cleanup:
@@ -528,7 +550,7 @@ int record_mem(int argc, char** argv, int cur)
 
 	/* pids to trace */
 	pid_t *pids = skel->bss->pids;
-	size_t num_of_pids = split(env.pids, pids);
+	size_t pid_nr = split_pid(env.pids, pids);
 	skel->bss->spec_pid = !env.all_p; // if to record all process(all_p = 1), specific pid(spec_pid) is 0
 	
 	bpf_map__set_value_size(skel->maps.stack_map, MAX_STACK_DEPTH * sizeof(unsigned long long));

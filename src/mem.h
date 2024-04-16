@@ -21,6 +21,6 @@
 #define MEM_H
 
 #define MAX_ENTRIES 10240
-#define MAX_PID 1024
+#define MAX_PID 64
 
 #endif
