@@ -18,7 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
 #include "vmlinux.h"
-#include "stat.h"
+#include "event.h"
 #include "bpf_util.h"
 #include "util.h"
 
@@ -26,38 +26,48 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(key_size, sizeof(__u32));
+	__uint(value_size, sizeof(__u8));
+	__uint(max_entries, 1);
+} task_filter SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, u32);
 	__type(value, u64);
 	__uint(max_entries, MAX_ENTRIES);
-} stat_cnt SEC(".maps");
+} event_cnt SEC(".maps");
 
-SEC("tracepoint")
-int stat_tracepoint(void *ctx)
-{
-	bpf_printk("triggered");
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__type(key, u32);
+	__type(value, struct stack_array);
+	__uint(max_entries, 1);
+} stacks SEC(".maps");
 
-	u64 zero = 0;
-	u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
-	if (cnt)
-		__sync_fetch_and_add(cnt, 1);
-	else {
-		bpf_printk("Failed to look up stack sample");
-		return -1;
-	}
-	return 0;
-}
+struct {
+    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+    __type(key, int);
+    __type(value, __u32);
+} pb SEC(".maps");
 
 SEC("ksyscall")
-int stat_ksyscall(void *ctx)
+int tracepoint(void *ctx)
 {
-	bpf_printk("triggered");
-	u64 zero = 0;
-	u64* cnt = bpf_map_lookup_insert(&stat_cnt, &zero, &zero);
-	if (cnt)
-		__sync_fetch_and_add(cnt, 1);
-	else {
-		bpf_printk("Failed to look up stack sample");
-		return -1;
+	u64 tgid = bpf_get_current_pid_tgid();
+	
+
+	int zero = 0, len = 0;
+	struct stack_array *sa = bpf_map_lookup_elem(&stacks, &zero);
+	if (sa) {
+		len = bpf_get_stack(ctx, sa->array, sizeof(sa->array), BPF_F_USER_STACK);
+		if (len < 0)
+			return 0;
+
+		int output_len = sizeof(u64) * len;
+		if (output_len <= sizeof(sa->array))
+			bpf_perf_event_output(ctx, &pb, BPF_F_CURRENT_CPU, sa, output_len);
 	}
+
 	return 0;
 }

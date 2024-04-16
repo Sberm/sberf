@@ -21,6 +21,10 @@
 #define STAT_H
 
 #define MAX_ENTRIES 10240
+#define MAX_STACKS 32
 
+struct stack_array {
+	unsigned long array[MAX_STACKS];
+};
 
 #endif

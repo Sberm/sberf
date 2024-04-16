@@ -89,6 +89,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 		last_key = cur_key;
 	} 
 
+	free(frame);
 	return stack_ag_p;
 }
 

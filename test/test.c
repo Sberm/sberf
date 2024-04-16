@@ -85,6 +85,8 @@ void test_random() {
 		else
 			printf("%c", p[i]);
 	} printf("\n");
+
+	free(p);
 }
 
 int main() 

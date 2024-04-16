@@ -37,12 +37,13 @@
 #include "sub_commands.h"
 #include "util.h"
 #include "record.skel.h"
-#include "stat.skel.h"
+#include "event.skel.h"
 #include "mem.skel.h"
 #include "record.h"
 #include "stack.h"
 #include "sym.h"
 #include "plot.h"
+#include "event.h"
 
 static char event_names[48][48];
 
@@ -168,7 +169,10 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 
 		last_key = cur_key;
 	} 
-	
+
+
+	free(frame);
+
 	printf("Collected %d samples\n", sample_num_total);
 }
 
@@ -256,57 +260,82 @@ int cmd_record(int argc, char **argv)
 	return err;
 }
 
+void syscall_handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
+{
+	struct stack_array *sa = data;
+	for (int i = 0;i < data_sz / sizeof(unsigned long) && sa->array[i];i++) {
+		printf("%lx\n", sa->array[i]);
+	}
+}
+
 int record_syscall(int argc, char** argv, int cur)
 {
-	struct stat_bpf *skel;
+	struct event_bpf *skel;
 	int err = 0;
+	int event_num;
+	struct perf_buffer *pb = NULL;
+	struct perf_buffer_opts pb_opts = {};
 
 	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
 
-	int event_num = split_event_str();
+	event_num = split_event_str();
 
 	printf("recording events: ");
 	for (int i = 0;i < event_num; i++)
 		printf("%s ", event_names[i]);
 	printf("\n");
 
-	skel = stat_bpf__open();
+	skel = event_bpf__open();
 	if (!skel) {
 		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
 		return 1;
 	}
 
-	err = stat_bpf__load(skel);
+	err = event_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
 	}
 
-	err = stat_bpf__attach(skel);
+	err = event_bpf__attach(skel);
 	if (err) {
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
 		goto cleanup;
 	}
 
+	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), 8, syscall_handle_event, NULL, NULL, NULL);
+
 	/* syscall */
 	struct bpf_link *link = NULL;
 	for (int i = 0;i < event_num;i++) {
-		link = bpf_program__attach_ksyscall(skel->progs.stat_ksyscall, event_names[i], NULL);
+		link = bpf_program__attach_ksyscall(skel->progs.tracepoint, event_names[i], NULL);
 		if (link == NULL) {
 			printf("Failed to attach syscall %s\n", event_names[i]);
 		}
 	}
 
+	while (true) {
+		err = perf_buffer__poll(pb, 200);
+		if (err == -EINTR) {
+			err = 0;
+			break;
+		}
+		if (err < 0)
+			goto cleanup;
+	}
+
 	sleep(100);
 
+pb_cleanup:
+	perf_buffer__free(pb);
 cleanup:
-	stat_bpf__destroy(skel);
+	event_bpf__destroy(skel);
 	return err;
 }
 
 int record_tracepoint(int argc, char** argv, int cur)
 {
-	struct stat_bpf *skel;
+	struct event_bpf *skel;
 	int err = 0;
 
 	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
@@ -318,19 +347,19 @@ int record_tracepoint(int argc, char** argv, int cur)
 		printf("%s ", event_names[i]);
 	printf("\n");
 
-	skel = stat_bpf__open();
+	skel = event_bpf__open();
 	if (!skel) {
 		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
 		return 1;
 	}
 
-	err = stat_bpf__load(skel);
+	err = event_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
 	}
 
-	err = stat_bpf__attach(skel);
+	err = event_bpf__attach(skel);
 	if (err) {
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
 		goto cleanup;
@@ -345,7 +374,7 @@ int record_tracepoint(int argc, char** argv, int cur)
 		/* event_names[i] now is the category(syscalls), tracepoint is sys_enter_open */
 		strtok(event_names[i], ":"); tracepoint = strtok(NULL, ":");
 
-		link = bpf_program__attach_tracepoint(skel->progs.stat_tracepoint, event_names[i], tracepoint);
+		link = bpf_program__attach_tracepoint(skel->progs.tracepoint, event_names[i], tracepoint);
 		if (link == NULL) {
 			printf("Failed to attach syscall %s\n", event_names[i]);
 		}
@@ -354,7 +383,7 @@ int record_tracepoint(int argc, char** argv, int cur)
 	sleep(100);
 
 cleanup:
-	stat_bpf__destroy(skel);
+	event_bpf__destroy(skel);
 	return err;
 }
 
