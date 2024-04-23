@@ -22,14 +22,15 @@
 
 #define MAX_ENTRIES 10240
 #define MAX_STACKS 32
+#define MAX_EVENTS 1500
 
 #define TP_TRGR(index)                                            \
 SEC("tp")                                                         \
 int tp_trgr_##index(void* ctx)                                    \
 {                                                                 \
-	u64 pid_tgid = bpf_get_current_pid_tgid();                    \
+	u64 *cnt, pid_tgid = bpf_get_current_pid_tgid();              \
 	pid_t pid = pid_tgid >> 32;                                   \
-	u32 zero = 0, key_##index = (index), *cnt;                    \
+	u32 zero = 0, key_##index = (index);                          \
 	if (filter_pid(pid) && !enable)                               \
 		return 0;                                                 \
 	cnt = bpf_map_lookup_insert(&event_cnt, &key_##index, &zero); \
@@ -37,7 +38,6 @@ int tp_trgr_##index(void* ctx)                                    \
 		__sync_fetch_and_add(cnt, 1);                             \
 	else                                                          \
 		return -1;                                                \
-	bpf_printk("cnt %u", *cnt);\
 	return 0;                                                     \
 }                                                                 \
 

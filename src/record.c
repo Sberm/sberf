@@ -378,7 +378,7 @@ int record_tracepoint(int argc, char** argv, int cur)
 	struct bpf_tracepoint_opts tp_opts = {.sz = sizeof(struct bpf_tracepoint_opts)};
 	struct tp_name tp_names[MAX_TP_TRGR_PROG];
 	int err = 0, event_num = 0, fd, one = 1;
-	unsigned int cnt = 0;
+	unsigned long long cnt = 0;
 	pid_t pids[MAX_PID];
 	size_t pid_nr;
 	char tmp[64];

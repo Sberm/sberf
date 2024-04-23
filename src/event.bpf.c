@@ -69,8 +69,8 @@ struct {
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, u32);
-	__type(value, u32);
-	__uint(max_entries, MAX_ENTRIES);
+	__type(value, u64);
+	__uint(max_entries, MAX_EVENTS);
 } event_cnt SEC(".maps");
 
 static int inline filter_pid(pid_t pid)
