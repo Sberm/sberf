@@ -35,14 +35,15 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 // specific pid
 volatile bool spec_pid = false;
-volatile pid_t pids[MAX_PID] = {0};
 
 // init value for insertion into map
 static const u64 zero;
 
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
+	__uint(value_size, MAX_STACK_DEPTH * sizeof(u64));
 	__type(key, u32);
+	__uint(max_entries, MAX_ENTRIES);
 } stack_map SEC(".maps");
 
 struct {
@@ -59,18 +60,8 @@ int profile(struct bpf_perf_event_data *ctx)
 	u32 pid = id >> 32;
 
 	// if to trace only specific pids
-	if (spec_pid) {
-		int i;
-		for (i = 0;i < ARRAY_LEN(pids); i++) {
-			if (pids[i] == 0)
-				return 0;
-			if (pids[i] == pid)
-				break;
-		}
-		/* didn't match through the whole pids array */
-		if (i == ARRAY_LEN(pids))
-			return 0;
-	}
+	if (spec_pid && filter_pid(pid))
+		return 0;
 
 	struct key_t key = {};
 

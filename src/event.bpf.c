@@ -41,13 +41,6 @@ struct tp_args {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(key_size, sizeof(__u32));
-	__uint(value_size, sizeof(__u8));
-	__uint(max_entries, 1);
-} task_filter SEC(".maps");
-
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, u32);
 	__type(value, u8);
 	__uint(max_entries, 512);
@@ -72,14 +65,6 @@ struct {
 	__type(value, u64);
 	__uint(max_entries, MAX_EVENTS);
 } event_cnt SEC(".maps");
-
-static int inline filter_pid(pid_t pid)
-{
-	if (!bpf_map_lookup_elem(&task_filter, &pid))
-		return 1;
-	else
-		return 0;
-}
 
 // TODO: is it necessary
 static int inline filter_syscall_nr(long syscall_nr)

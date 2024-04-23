@@ -6,7 +6,22 @@
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
 
-void* bpf_map_lookup_insert(void *map, const void *key, const void *init_val)
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(key_size, sizeof(__u32));
+	__uint(value_size, sizeof(__u8));
+	__uint(max_entries, 1);
+} task_filter SEC(".maps");
+
+static int inline filter_pid(pid_t pid)
+{
+	if (!bpf_map_lookup_elem(&task_filter, &pid))
+		return 1;
+	else
+		return 0;
+}
+
+static void* bpf_map_lookup_insert(void *map, const void *key, const void *init_val)
 {
 	void *ret;
 	ret = bpf_map_lookup_elem(map, key);
