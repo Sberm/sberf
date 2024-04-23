@@ -23,6 +23,24 @@
 #define MAX_ENTRIES 10240
 #define MAX_STACKS 32
 
+#define TP_TRGR(index)                                            \
+SEC("tp")                                                         \
+int tp_trgr_##index(void* ctx)                                    \
+{                                                                 \
+	u64 pid_tgid = bpf_get_current_pid_tgid();                    \
+	pid_t pid = pid_tgid >> 32;                                   \
+	u32 zero = 0, key_##index = (index), *cnt;                    \
+	if (filter_pid(pid) && !enable)                               \
+		return 0;                                                 \
+	cnt = bpf_map_lookup_insert(&event_cnt, &key_##index, &zero); \
+	if (cnt)                                                      \
+		__sync_fetch_and_add(cnt, 1);                             \
+	else                                                          \
+		return -1;                                                \
+	bpf_printk("cnt %u", *cnt);\
+	return 0;                                                     \
+}                                                                 \
+
 struct stack_array {
 	unsigned long array[MAX_STACKS];
 };

@@ -45,10 +45,13 @@
 #include "plot.h"
 #include "event.h"
 
+#define TP_TRGR_PROG(index) skel->progs.tp_trgr_##index
+#define MAX_TP_TRGR_PROG 6
+
 static struct ksyms *record__ksym_tb;
 static struct usyms *record__usym_tb;
-
-static char event_names[48][48];
+static char event_names[MAX_TP_TRGR_PROG][64];
+static volatile bool done;
 
 static struct {
 	int freq;
@@ -104,8 +107,14 @@ static struct env_struct mem_env[] = {
 	{"-fn", 1, &env.svg_file_name},
 };
 
+struct tp_name {
+	char category[16];
+	char name[48];
+};
+
 static void signalHandler(int signum)
 {
+	done = true;
 }
 
 int print_stack_frame(unsigned long long *frame, int sample_num, char mode, void* sym_tb)
@@ -270,9 +279,9 @@ void syscall_handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	char name[128];
 	for (int i = 0;i < data_sz / sizeof(unsigned long) && sa->array[i];i++) {
 		usym_addr_to_sym(record__usym_tb, sa->array[i], name);
-		printf("%lx %s\n", sa->array[i], name);
+		printf("0x%lx %s\n", sa->array[i], name);
 	}
-	printf("\n\n");
+	printf("\n");
 }
 
 int record_syscall(int argc, char** argv, int cur)
@@ -326,11 +335,13 @@ int record_syscall(int argc, char** argv, int cur)
 	}
 
 	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), 8, syscall_handle_event, NULL, NULL, NULL);
+	if (pb == NULL)
+		goto sym_pb_cleanup;
 
 	/* syscall */
 	struct bpf_link *link = NULL;
 	for (int i = 0;i < event_num;i++) {
-		link = bpf_program__attach_ksyscall(skel->progs.tracepoint, event_names[i], NULL);
+		link = bpf_program__attach_ksyscall(skel->progs.syscall_trgr, event_names[i], NULL);
 		if (link == NULL) {
 			printf("Failed to attach syscall %s\n", event_names[i]);
 		}
@@ -346,10 +357,15 @@ int record_syscall(int argc, char** argv, int cur)
 			goto cleanup;
 	}
 
-	sleep(100);
+	signal(SIGINT, signalHandler);
 
-pb_cleanup:
+	for(;!done;){};
+
+sym_pb_cleanup:
+	ksym_free(record__ksym_tb);
+	usym_free(record__usym_tb);
 	perf_buffer__free(pb);
+
 cleanup:
 	event_bpf__destroy(skel);
 	return err;
@@ -358,11 +374,19 @@ cleanup:
 int record_tracepoint(int argc, char** argv, int cur)
 {
 	struct event_bpf *skel;
-	int err = 0;
+	struct bpf_link *link = NULL;
+	struct bpf_tracepoint_opts tp_opts = {.sz = sizeof(struct bpf_tracepoint_opts)};
+	struct tp_name tp_names[MAX_TP_TRGR_PROG];
+	int err = 0, event_num = 0, fd, one = 1;
+	unsigned int cnt = 0;
+	pid_t pids[MAX_PID];
+	size_t pid_nr;
+	char tmp[64];
 
 	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
 
-	int event_num = split_event_str();
+	event_num = split_event_str();
+	pid_nr = split_pid(env.pids, pids);
 
 	printf("recording events: ");
 	for (int i = 0;i < event_num; i++)
@@ -381,14 +405,23 @@ int record_tracepoint(int argc, char** argv, int cur)
 		goto cleanup;
 	}
 
-	err = event_bpf__attach(skel);
-	if (err) {
-		fprintf(stderr, "Failed to attach BPF skeleton\n");
-		goto cleanup;
+	struct bpf_program *tp_trigger_prog[MAX_TP_TRGR_PROG] = {
+		TP_TRGR_PROG(0),
+		TP_TRGR_PROG(1),
+		TP_TRGR_PROG(2),
+		TP_TRGR_PROG(3),
+		TP_TRGR_PROG(4),
+		TP_TRGR_PROG(5),
+	};
+
+	/* task filter */
+	fd = bpf_map__fd(skel->maps.task_filter);
+
+	for (int i = 0;i < pid_nr;i++) {
+		bpf_map_update_elem(fd, &pids[i], &one, BPF_ANY);
 	}
 
-	struct bpf_link *link = NULL;
-	for (int i = 0;i < event_num;i++) {
+	for (int i = 0; i < event_num && i < MAX_TP_TRGR_PROG; i++) {
 		/* syscalls:sys_enter_open */
 		char *tracepoint;
 		size_t index = 0;
@@ -396,13 +429,48 @@ int record_tracepoint(int argc, char** argv, int cur)
 		/* event_names[i] now is the category(syscalls), tracepoint is sys_enter_open */
 		strtok(event_names[i], ":"); tracepoint = strtok(NULL, ":");
 
-		link = bpf_program__attach_tracepoint(skel->progs.tracepoint, event_names[i], tracepoint);
+		strcpy(tp_names[i].category, event_names[i]);
+		strcpy(tp_names[i].name, tracepoint);
+
+		link = bpf_program__attach_tracepoint(tp_trigger_prog[i], event_names[i], tracepoint);
 		if (link == NULL) {
-			printf("Failed to attach syscall %s\n", event_names[i]);
+			printf("Failed to attach tracepoint %s:%s\n", event_names[i], tracepoint);
 		}
 	}
+	
+	err = event_bpf__attach(skel);
+	if (err) {
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
 
-	sleep(100);
+	skel->bss->enable = true;
+
+	signal(SIGINT, signalHandler);
+
+	for(;!done;){};
+
+	skel->bss->enable = false;
+
+	printf("\n");
+	printf("    %-46s    %s\n\n", "event", "count");
+
+	fd = bpf_map__fd(skel->maps.event_cnt);
+	if (fd < 0) {
+		printf("Failed to find fd of event counting map\n");
+		goto cleanup;
+	}
+
+	for (unsigned int i = 0; i < event_num && i < MAX_TP_TRGR_PROG; i++) {
+		err = bpf_map_lookup_elem(fd, &i, &cnt);
+		if (err)
+			printf("error\n");
+
+		sprintf(tmp, "%s:%s", tp_names[i].category, tp_names[i].name);
+		printf("    %-46s    %u\n", tmp, cnt);
+	}
+
+	printf("\n");
 
 cleanup:
 	event_bpf__destroy(skel);
@@ -503,8 +571,7 @@ int record_pid(int argc, char** argv, int cur)
 	/* consume sigint */
 	signal(SIGINT, signalHandler);
 
-	// TODO: parse command
-	sleep(100);
+	for (;!done;){}
 
 	/* kernel symbol table */
 	struct ksyms* ksym_tb;
@@ -568,8 +635,9 @@ int record_mem(int argc, char** argv, int cur)
 		goto cleanup;
 	}
 
+	signal(SIGINT, signalHandler);
 
-	sleep(100);
+	for(;!done;){};
 
 cleanup:
 	mem_bpf__destroy(skel);
