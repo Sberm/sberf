@@ -21,13 +21,17 @@
 #define STACK_H
 
 #include <bpf/libbpf.h>
+#include <stdbool.h>
 
 struct stack_ag {
 	struct stack_ag *next;
 	struct stack_ag *child;
-	unsigned long long addr;
 	unsigned int cnt;
-	char comm[16];
+	bool is_comm;
+	union {
+		char comm[16];
+		unsigned long long addr;
+	};
 };
 
 int stack_walk(struct stack_ag* p);

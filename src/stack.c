@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
 #include <bpf/bpf.h>
+#include <stdbool.h>
 #include "stack.h"
 #include "record.skel.h"
 #include "record.h"
@@ -60,6 +61,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 			stack_ag_p->child = NULL;
 			stack_ag_p->addr = 0; // all's special address
 			stack_ag_p->cnt = 0;
+			stack_ag_p->is_comm = false;
 		}
 
 		bpf_map_lookup_elem(sample_fd, cur_key, &sample_num);
@@ -125,6 +127,7 @@ struct stack_ag *comm_lookup_insert(struct stack_ag *stack_ag_p, char* comm)
 		tmp->child = NULL;
 		strcpy(tmp->comm, comm);
 		tmp->cnt = 0;
+		tmp->is_comm = true;
 
 		if (q) {
 			q->next = tmp;
@@ -186,6 +189,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 			tmp->child = NULL;
 			tmp->addr = frame[index];
 			tmp->cnt = sample_num;
+			tmp->is_comm = false;
 			p->next = tmp;
 			--index;
 			p_parent = tmp;
@@ -208,6 +212,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 		tmp->child = NULL;
 		tmp->addr = frame[index];
 		tmp->cnt = sample_num;
+		tmp->is_comm = false;
 
 		p_parent->child = tmp;
 		p_parent = tmp;

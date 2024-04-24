@@ -420,6 +420,11 @@ int record_tracepoint(int argc, char** argv, int cur)
 		TP_TRGR_PROG(5),
 	};
 
+	if (env.all_p)
+		skel->bss->spec_pid = false;
+	else
+		skel->bss->spec_pid = true;
+
 	/* task filter */
 	fd = bpf_map__fd(skel->maps.task_filter);
 
@@ -469,7 +474,7 @@ int record_tracepoint(int argc, char** argv, int cur)
 	for (unsigned int i = 0; i < event_num && i < MAX_TP_TRGR_PROG; i++) {
 		err = bpf_map_lookup_elem(fd, &i, &cnt);
 		if (err)
-			printf("error\n");
+			cnt = 0;
 
 		sprintf(tmp, "%s:%s", tp_names[i].category, tp_names[i].name);
 		printf("    %-46s    %u\n", tmp, cnt);

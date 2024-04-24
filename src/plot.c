@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
 #include <stdlib.h>
+#include <stdbool.h>
 #include "stack.h"
 #include "plot.h"
 #include "util.h"
@@ -99,14 +100,13 @@ void plot_prvt(struct stack_ag* p, int p_cnt, float x, float len, int depth, str
 	char frame_title[128];
 
 	/* find symbol of current frame's address */
-	if (p->addr == 0) {
-		if (strlen(p->comm) == 0)
-			strcpy(frame_title, "all");
-		else
-			strcpy(frame_title, p->comm);
-	}
-	else
+	if (p->addr == 0 && !p->is_comm) {
+		strcpy(frame_title, "all");
+	} else if (p->is_comm) {
+		strcpy(frame_title, p->comm);
+	} else {
 		addr_to_sym(ksym_tb, usym_tb, p->addr, frame_title);
+	}
 
 	char g_str[1024];
 
