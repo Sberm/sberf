@@ -25,7 +25,7 @@ struct cmd_struct {
 };
 
 struct func_struct {
-	char opt[4];
+	char opt[6];
 	int (*fn)(int, char**, int);
 };
 

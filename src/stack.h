@@ -26,7 +26,7 @@
 struct stack_ag {
 	struct stack_ag *next;
 	struct stack_ag *child;
-	unsigned int cnt;
+	unsigned long long cnt;
 	bool is_comm;
 	union {
 		char comm[16];

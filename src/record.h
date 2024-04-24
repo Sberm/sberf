@@ -23,7 +23,7 @@
 #define TASK_COMM_LEN 16
 #define MAX_ENTRIES 10240
 #define MAX_PID 64
-#define MAX_STACK_DEPTH 64
+#define MAX_STACK_DEPTH 32
 
 struct key_t {
 	__u32 pid;
@@ -35,6 +35,8 @@ struct key_t {
 int record_syscall(int argc, char** argv, int index);
 int record_tracepoint(int argc, char** argv, int index);
 int record_pid(int argc, char** argv, int index);
-int record_mem(int argc, char** argv, int cur);
+int record_mem(int argc, char** argv, int index);
+int record_off_cpu(int argc, char** argv, int index);
+int record_print_help(int argc, char** argv, int index);
 
 #endif

@@ -21,21 +21,23 @@
 #include "off_cpu.h"
 #include "bpf_util.h"
 
+#define PF_KTHREAD   0x00200000
+#define CLONE_THREAD  0x10000
+#define TASK_INTERRUPTIBLE	0x0001
+#define TASK_UNINTERRUPTIBLE	0x0002
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-struct sched_switch_args {
-	unsigned long long common_fields;
-	char prev_comm[16];
-	pid_t prev_pid;
-	int prev_prio;
-	long prev_state;
-	char next_comm[16];
-	pid_t next_pid;
-};
+volatile bool enable;
+volatile bool spec_pid;
+
+struct task_struct__old {
+    long state;
+} __attribute__((preserve_access_index));
 
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
-	__type(key, __u32);
+	__type(key, int);
 	__type(value, MAX_STACKS * sizeof(__u64));
 	__uint(max_entries, MAX_ENTRIES);
 } stacks SEC(".maps");
@@ -43,71 +45,100 @@ struct {
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, struct off_cpu_key);
-	__type(value, struct off_cpu_data);
+	__type(value, u64);
 	__uint(max_entries, MAX_ENTRIES);
-} off_cpu SEC(".maps");
+} off_cpu_time SEC(".maps");
 
-SEC("tp/sched/sched_switch")
-int sched_switch(void* ctx)
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, struct internal_key);
+	__type(value, struct internal_data);
+	__uint(max_entries, MAX_ENTRIES);
+} internal_map SEC(".maps");
+
+static inline bool check_thread(struct task_struct *ts)
 {
+	if (ts->flags & PF_KTHREAD)
+		return false;
+
+	int state;
+
+	if (bpf_core_field_exists(ts->__state)) {
+		state = BPF_CORE_READ(ts, __state);
+	} else {
+		struct task_struct__old *ts_ = (void *)ts;
+		state = BPF_CORE_READ(ts_, state);
+	}
+
+	state &= 0xff;
+
+	if (state != TASK_INTERRUPTIBLE && state != TASK_UNINTERRUPTIBLE)
+		return false;
+
+	return true;
+}
+
+SEC("tp_btf/sched_switch")
+int sched_switch(u64 *ctx)
+{
+	if (!enable)
+		return 0;
+
 	u64 ts = bpf_ktime_get_ns();
-	u32 stack_id;
+	u32 stack_id = 0;
 	__u64 zero = 0;
 	struct task_struct *prev, *next; 
+	struct internal_data *id;
+	pid_t tgid, pid;
 
-	bpf_core_read(&prev, sizeof(void *), &ctx[1]);
-	bpf_core_read(&next, sizeof(void *), &ctx[2]);
+	prev = (void *)ctx[1];
+	next = (void *)ctx[2];
 
-	stack_id = bpf_get_stackid(ctx, &stacks, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
+	tgid = BPF_CORE_READ(prev, tgid);
+	pid = BPF_CORE_READ(prev, pid);
 
-	struct off_cpu_key key_p = {
-		.pid = prev->pid,
-		.tgid = prev->tgid,	
+	struct internal_key key_p = {
+		.tgid = tgid,
+		.pid = pid,
 	};
 
-	struct off_cpu_data *od = bpf_map_lookup_elem(&off_cpu, &key_p);
+	struct internal_data tmp =  {
+		.stack_id = -1,
+		.ts = 0,
+	};
 
-	if (od) {	
-		od->ts = ts;
-		od->stack_id = stack_id;
+	if (check_thread(prev)) {
+		id = bpf_map_lookup_insert(&internal_map, &key_p, &tmp);
+		if (id && !id->ts) {
+			id->stack_id = bpf_get_stackid(ctx, &stacks, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
+			id->ts = ts;
+		}
 	}
 
 	// next	
-	
-	struct off_cpu_key key_n = {
-		.pid = next->pid,
-		.tgid = next->tgid,
+	tgid = BPF_CORE_READ(next, tgid);
+	pid = BPF_CORE_READ(next, pid);
+
+	struct internal_key key_n = {
+		.tgid = tgid,
+		.pid = pid,
 	};
 
-	od = bpf_map_lookup_elem(&off_cpu, &key_n);
+	id = bpf_map_lookup_elem(&internal_map, &key_n);
 
-	if (od) {
-		od->total += ts - od->ts;
-		od->ts = 0;
+	if (id && id->ts) {
+		struct off_cpu_key ok = {
+			.pid = pid,
+			.tgid = tgid,
+			.stack_id = id->stack_id,
+		};
+		
+		u64* total = bpf_map_lookup_insert(&off_cpu_time, &ok, &zero);
+		if (total) {
+			*total += ts - id->ts;
+			id->ts = 0;
+		}
 	}
-	
-	return 0;
-}
-
-SEC("tp/task/task_newtask")
-int new_task(void* ctx)
-{
-	u64 ts = bpf_ktime_get_ns();
-
-	struct task_struct *task = (struct task_struct*)bpf_get_current_task();
-
-	struct off_cpu_key key = {
-		.pid = task->pid,
-		.tgid = task->tgid,
-	};
-
-	struct off_cpu_data od = {
-		.ts = 0,
-		.total = 0,
-		.stack_id = 0,
-	};
-
-	bpf_map_update_elem(&off_cpu, &key, &od, BPF_NOEXIST);
 
 	return 0;
 }

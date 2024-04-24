@@ -85,7 +85,7 @@ float max_height = 0;
 const float x_st = 10;
 const int depth_st = 0;
 
-void plot_prvt(struct stack_ag* p, int p_cnt, float x, float len, int depth, struct ksyms* ksym_tb, struct usyms* usym_tb)
+void __plot(struct stack_ag* p, unsigned long long p_cnt, float x, float len, int depth, struct ksyms* ksym_tb, struct usyms* usym_tb)
 {
 	if (p == NULL)
 		return;
@@ -126,10 +126,10 @@ void plot_prvt(struct stack_ag* p, int p_cnt, float x, float len, int depth, str
 	svg_index += strlen(g_str);
 
 	/* brothers */
-	plot_prvt(p->next, p_cnt, x + width, len, depth, ksym_tb, usym_tb);
+	__plot(p->next, p_cnt, x + width, len, depth, ksym_tb, usym_tb);
 
 	/* children */
-	plot_prvt(p->child, p->cnt, x, width, depth + 1, ksym_tb, usym_tb);
+	__plot(p->child, p->cnt, x, width, depth + 1, ksym_tb, usym_tb);
 }
 
 int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
@@ -164,7 +164,7 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 	}
 	
 	/* write svg to svg_str */
-	plot_prvt(p, p->cnt, x_st, max_width, depth_st, ksym_tb, usym_tb);
+	__plot(p, p->cnt, x_st, max_width, depth_st, ksym_tb, usym_tb);
 
 	fprintf(fp, "<svg version=\"1.1\" width=\"%.0f\" height=\"%.0f\" onload=\"main(evt)\" viewBox=\"0 0 %.0f %.0f\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", max_width + 18, max_height + 18, max_width + 18, max_height + 18);
 

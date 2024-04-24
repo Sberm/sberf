@@ -86,7 +86,8 @@ void parse_opts_env(int argc, char** argv, int cur, struct env_struct *envs, int
 void parse_args(int argc, char** argv)
 {
 	int parse_flag = 0;
-	for (int i = 0;i < ARRAY_LEN(commands); i++) {
+
+	for (int i = 0;i < argc - 1 && i < ARRAY_LEN(commands); i++) {
 		if (strcmp(commands[i].cmd, argv[1]) == 0) {
 			parse_flag = 1;
 			commands[i].fn(argc, argv);

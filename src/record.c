@@ -35,20 +35,26 @@
 #include "cli.h"
 #include "sub_commands.h"
 #include "util.h"
+
 #include "record.skel.h"
 #include "event.skel.h"
 #include "mem.skel.h"
+#include "off_cpu.skel.h"
+
 #include "record.h"
 #include "stack.h"
 #include "sym.h"
 #include "plot.h"
 #include "event.h"
+#include "off_cpu.h"
 
 #define TP_TRGR_PROG(index) skel->progs.tp_trgr_##index
 #define MAX_TP_TRGR_PROG 6
 
+/* global variables for perf poll */
 static struct ksyms *record__ksym_tb;
 static struct usyms *record__usym_tb;
+
 static char event_names[MAX_TP_TRGR_PROG][64];
 static volatile bool done;
 
@@ -66,7 +72,7 @@ static struct {
 	.sample_freq = 69,
 	.no_plot = 0,
 	.pids = "\0", 
-	.all_p = 0,
+	.all_p = false,
 	.svg_file_name = "debug.svg",
 	.event_names_str = "\0",
 };
@@ -76,6 +82,8 @@ static struct func_struct record_func[] = {
 	{"-t", record_tracepoint},
 	{"-p", record_pid},
 	{"-m", record_mem},
+	{"-ocpu", record_off_cpu},
+	{"-h", record_print_help},
 };
 
 // TODO: refactor, delete the duplicates
@@ -124,23 +132,35 @@ static void signalHandler(int signum)
 	done = true;
 }
 
-int print_stack_frame(unsigned long long *frame, int sample_num, char mode, void* sym_tb)
+// TODO: use enum
+int print_stack_frame(unsigned long long *frame, unsigned long long sample_num, char mode, void* sym_tb)
 {
 	char name[128];
 	if (mode == 'k') {
-		printf("[kernel] %d samples:\n", sample_num);
+		printf("[kernel] %lu samples:\n", sample_num);
 		for (int i = 0; frame[i] && i < MAX_STACK_DEPTH; i++) {
 			ksym_addr_to_sym((struct ksyms*)sym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}
 	} else if (mode == 'u') {
-		printf("[user] %d samples:\n", sample_num);
+		printf("[user] %lu samples:\n", sample_num);
 		for (int i = 0; frame[i] && i < MAX_STACK_DEPTH; i++) {
 			usym_addr_to_sym((struct usyms*)sym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}
+	} else if (mode == 'o') {
+		// printf("[off-cpu] %.10fus:\n", (double)sample_num / 1000UL);
+		// printf("[off-cpu] %lluns:\n", sample_num);
+		int i = 0;
+		for (; frame[i] && i < MAX_STACKS; i++) {
+			// usym_addr_to_sym((struct usyms*)sym_tb, frame[i], name);
+			//printf("  %lx %s\n", frame[i], name);
+			// printf("  %lx \n", frame[i]);
+		}
+		if (i > 1)
+			printf("成了\n");
 	}
-	printf("\n");
+	// printf("\n");
 	return 0;
 }
 
@@ -157,8 +177,7 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 	unsigned long long *frame = calloc(MAX_STACK_DEPTH, sizeof(unsigned long long));
 	int err;
 
-	int sample_num = 0;
-	int sample_num_total = 0;
+	unsigned long long sample_num = 0, sample_num_total = 0;
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
 
@@ -194,6 +213,43 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 	free(frame);
 
 	printf("Collected %d samples\n", sample_num_total);
+}
+
+void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data, struct ksyms* ksym_tb, struct usyms* usym_tb)
+{
+	int stack_map_fd = bpf_map__fd(stack_map);
+	int off_cpu_data_fd = bpf_map__fd(off_cpu_data);
+	struct off_cpu_key a;
+	struct off_cpu_key *last_key = NULL, *cur_key = &a;
+	int err;
+	unsigned long long data;
+	unsigned int sample_num_total = 0;
+	unsigned long long *frame = calloc(MAX_STACKS, sizeof(unsigned long long));
+
+	while (bpf_map_get_next_key(off_cpu_data_fd, last_key, cur_key) == 0) {
+
+		/* number of stack sample */
+		err = bpf_map_lookup_elem(off_cpu_data_fd, cur_key, &data);
+		if (err) {
+			printf("Failed to retrieve off-cpu data\n");
+		}
+
+		++sample_num_total;
+
+		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->stack_id, frame);
+		if (!err) {
+			// printf("no err\n");
+			print_stack_frame(frame, data, 'o', usym_tb);
+		} else {
+			// printf("err\n");
+		}
+
+		last_key = cur_key;
+	} 
+
+	free(frame);
+
+	printf("Collected %d off-cpu samples\n", sample_num_total);
 }
 
 int split_event_str() {
@@ -242,15 +298,17 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 	stack_free(stack_ag_p);
 }
 
-void print_help_record()
+void __record_print_help()
 {
 	char help[] = "\n  Usage:\n\n"
-	              "    sberf record [Options]\n\n"
+	              "    sberf record [options]\n\n"
 	              "  Options:\n\n"
-	              "    -p: Pid to trace\n"
-	              "    -t: Name of the tracepoint\n"
-	              "    -s: Name of the syscall\n"
+	              "    -p: Record running time\n"
+	              "    -t: Record tracepoints' triggered time\n"
+	              "    -s: Record stack traces when a syscall is triggered\n"
 	              "    -m: Record memory usage\n"
+	              "    -ocpu: Record OFF-CPU time\n\n"
+
 	              "    -f: Frequency in Hz\n"
 	              "    -np: No plotting, print the stacks instead\n"
 	              "    -a: Trace all processes\n"
@@ -260,10 +318,16 @@ void print_help_record()
 	printf("%s", help);
 }
 
+int record_print_help(int argc, char** argv, int index)
+{
+	__record_print_help();
+	return 0;
+}
+
 int cmd_record(int argc, char **argv)
 {
 	if (argc < 3) {
-		print_help_record();
+		__record_print_help();
 		return 0;
 	}
 
@@ -291,17 +355,22 @@ void syscall_handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	printf("\n");
 }
 
-int record_syscall(int argc, char** argv, int cur)
+int record_syscall(int argc, char** argv, int index)
 {
 	struct event_bpf *skel;
 	int err = 0, event_num, fd, one = 1;
 	struct perf_buffer *pb = NULL;
 	struct perf_buffer_opts pb_opts = {};
-
-	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
-
+	size_t pid_nr;
 	pid_t pids[MAX_PID];
-	size_t pid_nr = split_pid(env.pids, pids);
+
+	parse_opts_env(argc, argv, index, event_env, ARRAY_LEN(event_env));
+
+	pid_nr = split_pid(env.pids, pids);
+	if (!pid_nr) {
+		__record_print_help();
+		return 0;
+	}
 
 	event_num = split_event_str();
 
@@ -377,7 +446,7 @@ cleanup:
 	return err;
 }
 
-int record_tracepoint(int argc, char** argv, int cur)
+int record_tracepoint(int argc, char** argv, int index)
 {
 	struct event_bpf *skel;
 	struct bpf_link *link = NULL;
@@ -389,10 +458,15 @@ int record_tracepoint(int argc, char** argv, int cur)
 	size_t pid_nr;
 	char tmp[64];
 
-	parse_opts_env(argc, argv, cur, event_env, ARRAY_LEN(event_env));
+	parse_opts_env(argc, argv, index, event_env, ARRAY_LEN(event_env));
 
 	event_num = split_event_str();
+
 	pid_nr = split_pid(env.pids, pids);
+	if (!pid_nr) {
+		__record_print_help();
+		return 0;
+	}
 
 	printf("recording events: ");
 	for (int i = 0;i < event_num; i++)
@@ -487,7 +561,7 @@ cleanup:
 	return err;
 }
 
-int record_pid(int argc, char** argv, int cur)
+int record_pid(int argc, char** argv, int index)
 {
 	struct record_bpf *skel;
 	int err = 0, one = 1, fd;
@@ -496,12 +570,13 @@ int record_pid(int argc, char** argv, int cur)
 	unsigned long long freq, sample_freq;
 	struct ksyms* ksym_tb;
 	struct usyms* usym_tb;
+	pid_t pids[MAX_PID];
 	struct perf_event_attr attr = {
 		.type = PERF_TYPE_SOFTWARE,
 		.config = PERF_COUNT_SW_CPU_CLOCK,
 	};
 
-	parse_opts_env(argc, argv, cur, pid_env, ARRAY_LEN(pid_env));
+	parse_opts_env(argc, argv, index, pid_env, ARRAY_LEN(pid_env));
 
 	skel = record_bpf__open();
 	if (!skel) {
@@ -509,13 +584,16 @@ int record_pid(int argc, char** argv, int cur)
 		return 1;
 	}
 
-	/* pids to trace */
-	pid_t pids[MAX_PID];
 	pid_nr = split_pid(env.pids, pids);
 
 	/* sberf record 1001 is also legal */
 	if (!env.all_p && strlen(env.pids) == 0)
 		pid_nr = split_pid(argv[2], pids);
+
+	if (!env.all_p && !pid_nr) {
+		__record_print_help();
+		return 0;
+	}
 
 	/* update task_filter */
 	fd = bpf_map__fd(skel->maps.task_filter);
@@ -609,12 +687,14 @@ cleanup:
 	return err;
 }
 
-int record_mem(int argc, char** argv, int cur)
+int record_mem(int argc, char** argv, int index)
 {
 	struct mem_bpf *skel;
 	int err = 0;
+	size_t pid_nr;
+	pid_t pids[MAX_PID];
 
-	parse_opts_env(argc, argv, cur, mem_env, ARRAY_LEN(mem_env));
+	parse_opts_env(argc, argv, index, mem_env, ARRAY_LEN(mem_env));
 
 	skel = mem_bpf__open();
 	if (!skel) {
@@ -623,9 +703,11 @@ int record_mem(int argc, char** argv, int cur)
 	}
 
 	/* pids to trace */
-	pid_t *pids = skel->bss->pids;
-	size_t pid_nr = split_pid(env.pids, pids);
-	skel->bss->spec_pid = !env.all_p;
+	pid_nr = split_pid(env.pids, pids);
+	if (!pid_nr) {
+		__record_print_help();
+		return 0;
+	}
 	
 	bpf_map__set_value_size(skel->maps.stack_map, MAX_STACK_DEPTH * sizeof(unsigned long long));
 	bpf_map__set_max_entries(skel->maps.stack_map, MAX_ENTRIES);
@@ -635,6 +717,8 @@ int record_mem(int argc, char** argv, int cur)
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
 	}
+
+	skel->bss->spec_pid = !env.all_p;
 
 	err = mem_bpf__attach(skel);
 	if (err) {
@@ -652,12 +736,79 @@ cleanup:
 	return 0;
 }
 
-int record_off_cpu(int argc, char** argv, int cur)
+int record_off_cpu(int argc, char** argv, int index)
 {
-	struct mem_bpf *skel;
-	int err = 0;
+	struct off_cpu_bpf *skel;
+	struct ksyms *ksym_tb;
+	struct usyms *usym_tb;
+	int err = 0, pid_nr, one = 1, fd;
+	pid_t pids[MAX_PID];
 
-	parse_opts_env(argc, argv, cur, off_cpu_env, ARRAY_LEN(off_cpu_env));
+	/* default all processes */
+	env.all_p = true;
 
+	parse_opts_env(argc, argv, index, off_cpu_env, ARRAY_LEN(off_cpu_env));
+
+	pid_nr = split_pid(env.pids, pids);
+	if (!pid_nr && !env.all_p) {
+		__record_print_help();
+		return 0;
+	}
+
+	skel = off_cpu_bpf__open();
+	if (!skel) {
+		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
+		return 1;
+	}
+
+	err = off_cpu_bpf__load(skel);
+	if (err) {
+		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
+		goto cleanup;
+	}
 	
+	if (env.all_p)
+		skel->bss->spec_pid = false;
+	else
+		skel->bss->spec_pid = true;
+
+	fd = bpf_map__fd(skel->maps.task_filter);
+
+	for (int i = 0;i < pid_nr;i++)
+		bpf_map_update_elem(fd, &pids[i], &one, BPF_ANY);
+
+	err = off_cpu_bpf__attach(skel);
+	if (err) {
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
+
+	skel->bss->enable = true;
+
+	signal(SIGINT, signalHandler);
+
+	for(;!done;){};
+
+	skel->bss->enable = false;
+
+	if (env.no_plot == 1) {
+		ksym_tb = ksym_load();
+		usym_tb = usym_load(pids, pid_nr);
+
+		if (ksym_tb && usym_tb)
+			printf("\nSymbols loaded\n");
+
+		print_stack_off_cpu(skel->maps.stacks, skel->maps.off_cpu_time, ksym_tb, usym_tb);
+
+		ksym_free(ksym_tb);
+		usym_free(usym_tb);
+	} else if (env.no_plot == 0){
+		// record_plot_off_cpu(skel->maps.stacks, skel->maps.off_cpu_map, pids, pid_nr);
+	}
+
+	return 0;
+
+cleanup:
+	off_cpu_bpf__destroy(skel);
+	return err;
 }

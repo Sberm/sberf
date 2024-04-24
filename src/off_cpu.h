@@ -22,15 +22,32 @@
 #define MAX_ENTRIES 10240
 #define MAX_STACKS 32
 
+// user-space fetching
 struct off_cpu_key {
+	int pid;
+	int tgid;
+	int stack_id;
+};
+
+// kernel-space handling
+struct internal_data {
+	int stack_id;
+	unsigned long long ts;
+};
+
+struct internal_key {
 	int pid;
 	int tgid;
 };
 
-struct off_cpu_data {
-	unsigned long long ts;
-	unsigned long long total;
-	unsigned int stack_id;
+struct sched_switch_args {
+	unsigned long long common_fields;
+	char prev_comm[16];
+	pid_t prev_pid;
+	int prev_prio;
+	long prev_state;
+	char next_comm[16];
+	pid_t next_pid;
 };
 
 #endif 
