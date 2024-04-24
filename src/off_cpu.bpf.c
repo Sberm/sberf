@@ -38,7 +38,7 @@ struct task_struct__old {
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
 	__type(key, int);
-	__type(value, MAX_STACKS * sizeof(__u64));
+	__uint(value_size, MAX_STACKS * sizeof(__u64));
 	__uint(max_entries, MAX_ENTRIES);
 } stacks SEC(".maps");
 
@@ -56,19 +56,24 @@ struct {
 	__uint(max_entries, MAX_ENTRIES);
 } internal_map SEC(".maps");
 
-static inline bool check_thread(struct task_struct *ts)
+static inline int get_state(struct task_struct *ts)
 {
-	if (ts->flags & PF_KTHREAD)
-		return false;
-
 	int state;
-
 	if (bpf_core_field_exists(ts->__state)) {
 		state = BPF_CORE_READ(ts, __state);
 	} else {
 		struct task_struct__old *ts_ = (void *)ts;
 		state = BPF_CORE_READ(ts_, state);
 	}
+	return state;
+}
+
+static inline bool check_thread(struct task_struct *ts)
+{
+	if (ts->flags & PF_KTHREAD)
+		return false;
+
+	int state = get_state(ts);
 
 	state &= 0xff;
 
@@ -85,7 +90,6 @@ int sched_switch(u64 *ctx)
 		return 0;
 
 	u64 ts = bpf_ktime_get_ns();
-	u32 stack_id = 0;
 	__u64 zero = 0;
 	struct task_struct *prev, *next; 
 	struct internal_data *id;
@@ -108,9 +112,11 @@ int sched_switch(u64 *ctx)
 	};
 
 	if (check_thread(prev)) {
+		int stack_id = bpf_get_stackid(ctx, &stacks, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
 		id = bpf_map_lookup_insert(&internal_map, &key_p, &tmp);
-		if (id && !id->ts) {
-			id->stack_id = bpf_get_stackid(ctx, &stacks, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
+		if (id) {
+			if (stack_id >= 0)
+				id->stack_id = stack_id;
 			id->ts = ts;
 		}
 	}

@@ -149,18 +149,14 @@ int print_stack_frame(unsigned long long *frame, unsigned long long sample_num, 
 			printf("  %lx %s\n", frame[i], name);
 		}
 	} else if (mode == 'o') {
-		// printf("[off-cpu] %.10fus:\n", (double)sample_num / 1000UL);
-		// printf("[off-cpu] %lluns:\n", sample_num);
+		printf("[off-cpu] %.5fms:\n", (double)sample_num / 1000000UL);
 		int i = 0;
 		for (; frame[i] && i < MAX_STACKS; i++) {
-			// usym_addr_to_sym((struct usyms*)sym_tb, frame[i], name);
-			//printf("  %lx %s\n", frame[i], name);
-			// printf("  %lx \n", frame[i]);
+			usym_addr_to_sym((struct usyms*)sym_tb, frame[i], name);
+			printf("  %lx %s\n", frame[i], name);
 		}
-		if (i > 1)
-			printf("成了\n");
 	}
-	// printf("\n");
+	printf("\n");
 	return 0;
 }
 
@@ -209,7 +205,6 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 		last_key = cur_key;
 	} 
 
-
 	free(frame);
 
 	printf("Collected %d samples\n", sample_num_total);
@@ -236,9 +231,12 @@ void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data
 
 		++sample_num_total;
 
+		// printf("%d %d %d %d\n", cur_key->stack_id, cur_key->pid, cur_key->tgid, cur_key->state);
+
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->stack_id, frame);
 		if (!err) {
 			// printf("no err\n");
+			printf("PID %d\n", cur_key->tgid);
 			print_stack_frame(frame, data, 'o', usym_tb);
 		} else {
 			// printf("err\n");

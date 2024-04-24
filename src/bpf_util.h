@@ -29,9 +29,8 @@ static void* bpf_map_lookup_insert(void *map, const void *key, const void *init_
 		return ret;
 
 	int err = bpf_map_update_elem(map, key, init_val, BPF_NOEXIST);
-	if (err) {
+	if (err)
 		return NULL;
-	}
 
 	ret = bpf_map_lookup_elem(map, key);
 	return ret;
