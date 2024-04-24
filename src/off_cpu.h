@@ -20,11 +20,16 @@
 #define OFF_CPU_H
 
 #define MAX_ENTRIES 10240
+#define MAX_STACKS 32
 
 struct off_cpu_key {
 	int pid;
 	int tgid;
+};
+
+struct off_cpu_data {
 	unsigned long long ts;
+	unsigned long long total;
 	unsigned int stack_id;
 };
 
