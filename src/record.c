@@ -89,6 +89,7 @@ static struct func_struct record_func[] = {
 	{"-op", record_off_cpu},
 	{"--off-cpu", record_off_cpu},
 	{"-h", record_print_help},
+	{"--help", record_print_help},
 };
 
 // TODO: refactor, delete the duplicates
@@ -98,7 +99,7 @@ static struct env_struct pid_env[] = {
 	{"-np", 4, &env.no_plot},
 	{"-a", 4, &env.all_p},
 	{"-p", 1, &env.pids},
-	{"-fn", 1, &env.svg_file_name},
+	{"-o", 1, &env.svg_file_name},
 };
 
 static struct env_struct event_env[] = {
@@ -106,7 +107,7 @@ static struct env_struct event_env[] = {
 	{"-np", 4, &env.no_plot},
 	{"-a", 4, &env.all_p},
 	{"-p", 1, &env.pids},
-	{"-fn", 1, &env.svg_file_name},
+	{"-o", 1, &env.svg_file_name},
 	{"-s", 1, &env.event_names_str},
 	{"-t", 1, &env.event_names_str},
 };
@@ -116,7 +117,7 @@ static struct env_struct mem_env[] = {
 	{"-np", 4, &env.no_plot},
 	{"-a", 4, &env.all_p},
 	{"-p", 1, &env.pids},
-	{"-fn", 1, &env.svg_file_name},
+	{"-o", 1, &env.svg_file_name},
 };
 
 static struct env_struct off_cpu_env[] = {
@@ -124,7 +125,7 @@ static struct env_struct off_cpu_env[] = {
 	{"-np", 4, &env.no_plot},
 	{"-a", 4, &env.all_p},
 	{"-p", 1, &env.pids},
-	{"-fn", 1, &env.svg_file_name},
+	{"-o", 1, &env.svg_file_name},
 };
 
 struct tp_name {
@@ -331,16 +332,17 @@ void __record_print_help()
 	char help[] = "\n  Usage:\n\n"
 	              "    sberf record [options]\n\n"
 	              "  Options:\n\n"
-	              "    -p: Record running time\n"
-	              "    -t: Record tracepoints' triggered time\n"
-	              "    -s: Record stack traces when a syscall is triggered\n"
-	              "    -m: Record memory usage\n"
-	              "    -ocpu: Record OFF-CPU time\n\n"
+	              "    -p[--pid]: Record running time\n"
+	              "    -t[--tracepoint]: Record tracepoints' triggered time\n"
+	              "    -s[--syscall]: Record stack traces when a syscall is triggered\n"
+	              "    -m[--memory]: Record memory usage\n"
+	              "    -op[--off-cpu]: Record OFF-CPU time\n"
+	              "    -h[--help]: Print this help message\n\n"
 
 	              "    -f: Frequency in Hz\n"
 	              "    -np: No plotting, print the stacks instead\n"
-	              "    -a: Trace all processes\n"
-	              "    -fn: File name for the plot\n\n"
+	              "    -a: Record all processes\n"
+	              "    -o: File name for the plot\n"
 	              "\n";
 
 	printf("%s", help);

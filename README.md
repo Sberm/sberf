@@ -23,6 +23,28 @@ sudo ./sberf record <PID1>,<PID2>
 
 ```
 
+```bash
+
+  Usage:
+
+    sberf record [options]
+
+  Options:
+
+    -p[--pid]: Record running time
+    -t[--tracepoint]: Record tracepoints' triggered time
+    -s[--syscall]: Record stack traces when a syscall is triggered
+    -m[--memory]: Record memory usage
+    -op[--off-cpu]: Record OFF-CPU time
+    -h[--help]: Print this help message
+
+    -f: Frequency in Hz
+    -np: No plotting, print the stacks instead
+    -a: Record all processes
+    -o: File name for the plot
+
+```
+
 #### Compilation
 
 1. Install [bpftool](https://github.com/libbpf/bpftool)
