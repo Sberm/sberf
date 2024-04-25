@@ -23,7 +23,7 @@ sudo ./sberf record <PID1>,<PID2>
 
 ```
 
-```bash
+```txt
 
   Usage:
 
