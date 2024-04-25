@@ -79,10 +79,15 @@ static struct {
 
 static struct func_struct record_func[] = {
 	{"-s", record_syscall},
+	{"--syscall", record_syscall},
 	{"-t", record_tracepoint},
+	{"--tracepoint", record_tracepoint},
 	{"-p", record_pid},
+	{"--pid", record_pid},
 	{"-m", record_mem},
-	{"-ocpu", record_off_cpu},
+	{"--memory", record_mem},
+	{"-op", record_off_cpu},
+	{"--off-cpu", record_off_cpu},
 	{"-h", record_print_help},
 };
 
@@ -275,11 +280,34 @@ int split_pid(char *str, pid_t *pids) {
 	return index;
 }
 
+int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* , int *pids, int pid_nr) {
+	/* aggregate stack samples */
+	/*
+	struct stack_ag* stack_ag_p = stack_aggre_off_cpu(stack_map, sample);
+
+	if (!stack_ag_p) {
+		printf("No stack data\n");
+		return -1;
+	}
+
+	if(plot(stack_ag_p, env.svg_file_name, pids, pid_nr)) {
+		printf("Failed to plot");
+		return -1;
+	} else {
+		printf("\nPlotted to %s\n", env.svg_file_name);
+	}
+
+	stack_free(stack_ag_p);
+	*/
+
+	return 0;
+}
+
 int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, int pid_nr) {
 	/* aggregate stack samples */
 	struct stack_ag* stack_ag_p = stack_aggre(stack_map, sample);
 
-	if (stack_ag_p == NULL) {
+	if (!stack_ag_p) {
 		printf("No stack data\n");
 		return -1;
 	}
@@ -294,6 +322,8 @@ int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, in
 
 	/* free stack */
 	stack_free(stack_ag_p);
+
+	return 0;
 }
 
 void __record_print_help()
@@ -783,6 +813,8 @@ int record_off_cpu(int argc, char** argv, int index)
 
 	skel->bss->enable = true;
 
+	printf("Recording OFF-CPU\n");
+
 	signal(SIGINT, signalHandler);
 
 	for(;!done;){};
@@ -801,7 +833,7 @@ int record_off_cpu(int argc, char** argv, int index)
 		ksym_free(ksym_tb);
 		usym_free(usym_tb);
 	} else if (env.no_plot == 0){
-		// record_plot_off_cpu(skel->maps.stacks, skel->maps.off_cpu_map, pids, pid_nr);
+		record_plot_off_cpu(skel->maps.stacks, skel->maps.off_cpu_time, pids, pid_nr);
 	}
 
 	return 0;

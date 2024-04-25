@@ -19,19 +19,23 @@
 #ifndef CLI_H
 #define CLI_H
 
+enum ENV_MODE {
+	INT, STR, FLOAT, DOUBLE, MGL
+};
+
 struct cmd_struct {
 	const char* cmd;
 	int (*fn)(int, char**);
 };
 
 struct func_struct {
-	char opt[6];
+	char opt[16];
 	int (*fn)(int, char**, int);
 };
 
 struct env_struct {
 	char opt[4];
-	char type; // 0 -> int, 1 -> str, 2 -> float, 3 -> double, 4 -> itself as a value(.eg -a)
+	enum ENV_MODE type;
 	void *p;
 };
 

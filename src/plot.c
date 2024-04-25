@@ -48,7 +48,7 @@ static int colors[] = {
 };
 
 static const char css[] = "<style type=\"text/css\">\ntext { font-size:12px; fill:rgb(0,0,0); }\n</style>\n";
-static const char javascript[] = "<script><![CDATA[\n"
+static const char js[] = "<script><![CDATA[\n"
 " function main(evt) {\n"
 "     let g = document.querySelectorAll('g');\n"
 "     g.forEach((gi) => {\n"
@@ -111,10 +111,13 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, float x, float len, in
 	char g_str[1024];
 
 	snprintf(g_str, sizeof(g_str), " <g>\n"
-	                               " <title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\" rx=\"2\" ry=\"2\" />\n"
+	                               " <title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\""
+								   " width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\""
+								   " rx=\"2\" ry=\"2\" />\n"
 	                               " <text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
-	                               " </g>\n", frame_title, width / max_width*100, x, y, width, height, c,
-	                                          x + 0.2, y + FRAME_HEIGHT - 4);
+	                               " </g>\n",
+								   frame_title, width / max_width*100, x, y, width, height,
+								   c, x + 0.2, y + FRAME_HEIGHT - 4);
 
 	/* realloc just like a stl vector */
 	if (svg_index + strlen(g_str) >= svg_sz) {
@@ -169,7 +172,7 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 	fprintf(fp, "<svg version=\"1.1\" width=\"%.0f\" height=\"%.0f\" onload=\"main(evt)\" viewBox=\"0 0 %.0f %.0f\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", max_width + 18, max_height + 18, max_width + 18, max_height + 18);
 
 	fputs(css, fp);
-	fputs(javascript, fp);
+	fputs(js, fp);
 	fputs(svg_str, fp); // use fprintf here will cause seg fault
 
 	fprintf(fp, "</svg>\n");

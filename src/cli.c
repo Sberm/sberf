@@ -57,21 +57,21 @@ void parse_opts_env(int argc, char** argv, int cur, struct env_struct *envs, int
 		char* opt = argv[i];
 		for (int j = 0;j < envc;j++) {
 			if (strcmp(opt, envs[j].opt) == 0)
-				if (envs[j].type == 4)
+				if (envs[j].type == MGL)
 					*((int *)envs[j].p) = 1;
 			else if (strcmp(opt, envs[j].opt) == 0 && ++i < argc) {
 				opt = argv[i];
 				switch (envs[j].type) {
-				case 0:
+				case INT:
 					*((int *)envs[j].p) = atoi(opt);
 					break;
-				case 1:
+				case STR:
 					strcpy(envs[j].p, opt);
 					break;
-				case 2:
+				case FLOAT:
 					*((float *)envs[j].p) = atof(opt);
 					break;
-				case 3:
+				case DOUBLE:
 					*((double *)envs[j].p) = strtod(opt, NULL);
 					break;
 				default:
