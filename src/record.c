@@ -230,7 +230,6 @@ void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data
 	unsigned long long *frame = calloc(MAX_STACKS, sizeof(unsigned long long));
 
 	while (bpf_map_get_next_key(off_cpu_data_fd, last_key, cur_key) == 0) {
-
 		/* number of stack sample */
 		err = bpf_map_lookup_elem(off_cpu_data_fd, cur_key, &data);
 		if (err) {
@@ -241,10 +240,10 @@ void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data
 
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->stack_id, frame);
 		if (err && env.debug) {
+			printf("Failed to print off-cpu samples\n");
+		} else {
 			printf("PID %d\n", cur_key->tgid);
 			print_stack_frame(frame, data, 'o', usym_tb);
-		} else {
-			printf("Failed to print off-cpu samples\n");
 		}
 
 		last_key = cur_key;
@@ -771,9 +770,6 @@ int record_off_cpu(int argc, char** argv, int index)
 	int err = 0, pid_nr, one = 1, fd;
 	pid_t pids[MAX_PID];
 
-	/* default all processes */
-	env.all_p = true;
-
 	parse_opts_env(argc, argv, index, off_cpu_env, ARRAY_LEN(off_cpu_env));
 
 	pid_nr = split_pid(env.pids, pids);
@@ -798,6 +794,10 @@ int record_off_cpu(int argc, char** argv, int index)
 		skel->bss->spec_pid = false;
 	else
 		skel->bss->spec_pid = true;
+
+	/* temp */
+	if (pid_nr == 0)
+		skel->bss->spec_pid = false;
 
 	fd = bpf_map__fd(skel->maps.task_filter);
 

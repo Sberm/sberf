@@ -492,6 +492,7 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	return 0;
 
 usym_unknown:
+	strcpy(str, "[unknown]");
 	return SYM_UNKNOWN;
 }
 

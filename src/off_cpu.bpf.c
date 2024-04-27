@@ -58,6 +58,7 @@ struct {
 
 static inline int get_state(struct task_struct *ts)
 {
+	/*
 	int state;
 	if (bpf_core_field_exists(ts->__state)) {
 		state = BPF_CORE_READ(ts, __state);
@@ -65,7 +66,9 @@ static inline int get_state(struct task_struct *ts)
 		struct task_struct__old *ts_ = (void *)ts;
 		state = BPF_CORE_READ(ts_, state);
 	}
-	return state;
+	*/
+
+	return BPF_CORE_READ(ts, state);
 }
 
 static inline bool check_thread(struct task_struct *ts)
@@ -86,6 +89,7 @@ static inline bool check_thread(struct task_struct *ts)
 SEC("tp_btf/sched_switch")
 int sched_switch(u64 *ctx)
 {
+
 	if (!enable)
 		return 0;
 
@@ -125,7 +129,7 @@ int sched_switch(u64 *ctx)
 	tgid = BPF_CORE_READ(next, tgid);
 	pid = BPF_CORE_READ(next, pid);
 
-	if (filter_pid(tgid))
+	if (spec_pid && filter_pid(tgid))
 		return 0;
 
 	struct internal_key key_n = {

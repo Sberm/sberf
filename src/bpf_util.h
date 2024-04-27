@@ -1,6 +1,8 @@
 #ifndef BPF_UTIL_H
 #define BPF_UTIL_H
 
+#define TF 1024
+
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
@@ -10,7 +12,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(key_size, sizeof(__u32));
 	__uint(value_size, sizeof(__u8));
-	__uint(max_entries, 1);
+	__uint(max_entries, TF);
 } task_filter SEC(".maps");
 
 static int inline filter_pid(pid_t pid)
