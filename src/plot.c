@@ -135,6 +135,57 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, float x, float len, in
 	__plot(p->child, p->cnt, x, width, depth + 1, ksym_tb, usym_tb);
 }
 
+int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
+{
+	/* kernel symbol table */
+	struct ksyms* ksym_tb;
+	/* user symbol table */
+	struct usyms* usym_tb;
+
+	if (p == NULL)
+		return -1;
+
+	max_height = stack_get_depth(p) * FRAME_HEIGHT;
+
+	/* symbol table */
+	ksym_tb = ksym_load();
+	usym_tb = usym_load(pids, num_of_pids);
+	if (ksym_tb == NULL || usym_tb == NULL) {
+	    printf("Failed to load symbols when plotting\n");
+		return -1;
+	}
+	
+	FILE* fp = fopen(file_name, "w");
+
+	svg_str = malloc(sizeof(char) * svg_sz);
+	memset(svg_str, 0, sizeof(char) * svg_sz);
+
+	if (svg_str == NULL) {
+		printf("Failed to allocate memory for writing svg\n");
+		fclose(fp);
+		return -1;
+	}
+	
+	/* write svg to svg_str */
+	__plot(p, p->cnt, x_st, max_width, depth_st, ksym_tb, usym_tb);
+
+	fprintf(fp, "<svg version=\"1.1\" width=\"%.0f\" height=\"%.0f\" onload=\"main(evt)\" viewBox=\"0 0 %.0f %.0f\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", max_width + 18, max_height + 18, max_width + 18, max_height + 18);
+
+	fputs(css, fp);
+	fputs(js, fp);
+	fputs(svg_str, fp); // use fprintf here will cause seg fault
+
+	fprintf(fp, "</svg>\n");
+
+cleanup:
+	free(svg_str);
+	fclose(fp);
+	ksym_free(ksym_tb);
+	usym_free(usym_tb);
+
+	return 0;
+}
+
 int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 {
 	/* kernel symbol table */

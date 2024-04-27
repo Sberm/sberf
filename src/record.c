@@ -67,6 +67,7 @@ static struct {
 	int all_p;
 	char svg_file_name[256];
 	char event_names_str[512];
+	bool debug;
 } env = {
 	.freq = 1,
 	.sample_freq = 69,
@@ -75,6 +76,7 @@ static struct {
 	.all_p = false,
 	.svg_file_name = "debug.svg",
 	.event_names_str = "\0",
+	.debug = false,
 };
 
 static struct func_struct record_func[] = {
@@ -237,15 +239,12 @@ void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data
 
 		++sample_num_total;
 
-		// printf("%d %d %d %d\n", cur_key->stack_id, cur_key->pid, cur_key->tgid, cur_key->state);
-
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->stack_id, frame);
-		if (!err) {
-			// printf("no err\n");
+		if (err && env.debug) {
 			printf("PID %d\n", cur_key->tgid);
 			print_stack_frame(frame, data, 'o', usym_tb);
 		} else {
-			// printf("err\n");
+			printf("Failed to print off-cpu samples\n");
 		}
 
 		last_key = cur_key;
@@ -281,17 +280,16 @@ int split_pid(char *str, pid_t *pids) {
 	return index;
 }
 
-int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* , int *pids, int pid_nr) {
+int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* off_cpu_time, int *pids, int pid_nr) {
 	/* aggregate stack samples */
-	/*
-	struct stack_ag* stack_ag_p = stack_aggre_off_cpu(stack_map, sample);
+	struct stack_ag* stack_ag_p = stack_aggre_off_cpu(stack_map, off_cpu_time);
 
 	if (!stack_ag_p) {
 		printf("No stack data\n");
 		return -1;
 	}
 
-	if(plot(stack_ag_p, env.svg_file_name, pids, pid_nr)) {
+	if(plot_off_cpu(stack_ag_p, env.svg_file_name, pids, pid_nr)) {
 		printf("Failed to plot");
 		return -1;
 	} else {
@@ -299,7 +297,6 @@ int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* , int *pids, 
 	}
 
 	stack_free(stack_ag_p);
-	*/
 
 	return 0;
 }
@@ -815,7 +812,10 @@ int record_off_cpu(int argc, char** argv, int index)
 
 	skel->bss->enable = true;
 
-	printf("Recording OFF-CPU\n");
+	printf("Recording OFF-CPU ");
+	for (int i = 0; i < pid_nr; i++)
+		printf("%d ", pids[i]);
+	printf("\n");
 
 	signal(SIGINT, signalHandler);
 
@@ -826,6 +826,8 @@ int record_off_cpu(int argc, char** argv, int index)
 	if (env.no_plot == 1) {
 		ksym_tb = ksym_load();
 		usym_tb = usym_load(pids, pid_nr);
+
+		printf("table len %d\n", usym_tb->length);
 
 		if (ksym_tb && usym_tb)
 			printf("\nSymbols loaded\n");

@@ -23,6 +23,7 @@
 #include "record.skel.h"
 #include "record.h"
 #include "util.h"
+#include "off_cpu.h"
 
 int stack_walk(struct stack_ag* p)
 {
@@ -30,6 +31,56 @@ int stack_walk(struct stack_ag* p)
 		return 0;
 
 	return stack_walk(p->child) + stack_walk(p->next) + p->cnt;
+}
+
+struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample)
+{
+	struct stack_ag *stack_ag_p = NULL, *comm_p = NULL;
+
+	int stack_map_fd = bpf_map__fd(stack_map);
+	int sample_fd = bpf_map__fd(sample);
+
+	struct off_cpu_key a = {}, b = {};
+	struct off_cpu_key *last_key = &a;
+	struct off_cpu_key *cur_key = &b;
+
+	unsigned long long *frame = calloc(MAX_STACK_DEPTH, sizeof(unsigned long long));
+	int err;
+	unsigned long long sample_time = 0;
+
+	/*
+	 * root
+	 * |_ child1(comm1)___ child2(comm2)___ child3(comm3)
+	 *      |_child11(sym11)     |_child21(sym21)
+	 */
+
+	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
+		if (stack_ag_p == NULL) {
+			/* initialize root stack aggregation pointer */
+			stack_ag_p = malloc(sizeof(struct stack_ag));
+			stack_ag_p->next = NULL;
+			stack_ag_p->child = NULL;
+			stack_ag_p->addr = 0; // all's special address
+			stack_ag_p->cnt = 0;
+			stack_ag_p->is_comm = false;
+		}
+
+		bpf_map_lookup_elem(sample_fd, cur_key, &sample_time);
+
+		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->stack_id, frame);
+		if (err)
+			printf("\n[user stack lost]\n");
+		else {
+			stack_ag_p->cnt += sample_time;
+			// comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
+			stack_insert(stack_ag_p, frame, sample_time, MAX_STACK_DEPTH);
+		}
+
+		last_key = cur_key;
+	} 
+
+	free(frame);
+	return stack_ag_p;
 }
 
 struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)

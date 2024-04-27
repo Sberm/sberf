@@ -125,6 +125,9 @@ int sched_switch(u64 *ctx)
 	tgid = BPF_CORE_READ(next, tgid);
 	pid = BPF_CORE_READ(next, pid);
 
+	if (filter_pid(tgid))
+		return 0;
+
 	struct internal_key key_n = {
 		.tgid = tgid,
 		.pid = pid,
