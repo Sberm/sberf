@@ -58,7 +58,6 @@ struct {
 
 static inline int get_state(struct task_struct *ts)
 {
-	/*
 	int state;
 	if (bpf_core_field_exists(ts->__state)) {
 		state = BPF_CORE_READ(ts, __state);
@@ -66,9 +65,7 @@ static inline int get_state(struct task_struct *ts)
 		struct task_struct__old *ts_ = (void *)ts;
 		state = BPF_CORE_READ(ts_, state);
 	}
-	*/
-
-	return BPF_CORE_READ(ts, state);
+	return state;
 }
 
 static inline bool check_thread(struct task_struct *ts)

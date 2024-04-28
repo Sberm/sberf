@@ -92,6 +92,7 @@ static struct func_struct record_func[] = {
 	{"--off-cpu", record_off_cpu},
 	{"-h", record_print_help},
 	{"--help", record_print_help},
+	{"--numa", record_numa},
 };
 
 // TODO: refactor, delete the duplicates
@@ -489,7 +490,7 @@ int record_tracepoint(int argc, char** argv, int index)
 	event_num = split_event_str();
 
 	pid_nr = split_pid(env.pids, pids);
-	if (!pid_nr) {
+	if (!pid_nr && !env.all_p) {
 		__record_print_help();
 		return 0;
 	}
@@ -845,4 +846,9 @@ int record_off_cpu(int argc, char** argv, int index)
 cleanup:
 	off_cpu_bpf__destroy(skel);
 	return err;
+}
+
+int record_numa(int argc, char** argv, int index)
+{
+	return 0;
 }
