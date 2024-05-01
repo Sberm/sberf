@@ -29,6 +29,8 @@
 
 #define SYM_UNKNOWN 1
 
+#define USYM_MIN_ALLOC 128
+
 #ifndef ARRAY_LEN
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
 #endif
@@ -40,7 +42,7 @@ struct ksym {
 
 struct ksyms {
 	struct ksym* sym;
-	int length;
+	unsigned int length;
 };
 
 /* Unbelievably similar to ksym */
@@ -56,12 +58,14 @@ struct dso {
 	char path[1024];
 	struct dso_sym *sym;
 	/* dso_sym's length */
-	int length;
+	unsigned int length;
+	unsigned int capacity;
 };
 
 struct usyms {
 	struct dso *dsos;
-	int length;
+	unsigned int length;
+	unsigned int capacity;
 };
 
 int addr_to_sym(const struct ksyms *ksym_tb, const struct usyms *usym_tb, const unsigned long long addr, char *str);
@@ -310,10 +314,13 @@ ksym_unknown:
 
 int usym_init(struct usyms *usym_tb) 
 {
-	usym_tb->dsos = NULL;
-	usym_tb->length = 0;
 	if (usym_tb == NULL)
 		return -1;
+
+	usym_tb->dsos = NULL;
+	usym_tb->length = 0;
+	usym_tb->capacity = 0;
+
 	return 0;
 }
 
@@ -321,12 +328,24 @@ int usym_add(struct usyms *usym_tb, const char *path,
              const unsigned long long start_addr, const unsigned long long end_addr,
 			 const unsigned long offset)
 {
-	void *p = realloc(usym_tb->dsos, sizeof(struct dso) * (usym_tb->length + 1));
-	if (p == NULL) {
-		printf("Failed to reallocate userspace symbol table\n");
-		return -1;
+	if (usym_tb->dsos && usym_tb->length + 1 > usym_tb->capacity) {
+		/* 128 -> 256 */
+		unsigned int to_alloc = usym_tb->capacity * 2;
+		usym_tb->dsos = realloc(usym_tb->dsos, sizeof(struct dso) * to_alloc);
+		if (usym_tb->dsos == NULL) {
+			printf("Failed to reallocate userspace symbol table\n");
+			return -1;
+		}
+		usym_tb->capacity = to_alloc;
+
+	} else {
+		usym_tb->dsos = malloc(sizeof(struct dso) * USYM_MIN_ALLOC);
+		if (usym_tb->dsos == NULL) {
+			printf("Failed to reallocate userspace symbol table\n");
+			return -1;
+		}
+		usym_tb->capacity = USYM_MIN_ALLOC;
 	}
-	usym_tb->dsos = p;
 
 	struct dso dso_ = {
 		.start_addr = start_addr,
@@ -418,7 +437,7 @@ usym_load_cleanup:
 
 int usym_free(struct usyms *usym_tb)
 {
-	for (int i = 0;i < usym_tb->length; i++) {
+	for (int i = 0;i < usym_tb->capacity; i++) {
 		if (dso_free(&usym_tb->dsos[i])) {
 			printf("Failed to free userspace symbol table's dso\n");
 			exit(-1);
@@ -663,14 +682,16 @@ int elf_parse(FILE *fp, struct dso *dso_p)
 				if (fgets(fname, sizeof(fname), fp) == NULL)
 					continue;
 				faddr = faddr - p_vaddr + dso_p->offset;
-				// TODO: too much reallocating, change the way of reallocating
+				if (dso_p->length + 1 > dso_p->capacity) {
+					unsigned int to_alloc = dso_p->capacity == 0 ? USYM_MIN_ALLOC : dso_p->capacity * 2;
 
-				dso_p->sym = realloc(dso_p->sym, sizeof(struct dso_sym) * (dso_p->length + 1));
-
-				if (dso_p->sym == NULL)  {
-					printf("Failed to add symbol to dso %s\n", dso_p->path);
-					err = -1;
-					goto elf_parse_cleanup;
+					dso_p->sym = realloc(dso_p->sym, sizeof(struct dso_sym) * to_alloc);
+					if (dso_p->sym == NULL)  {
+						printf("Failed to add symbol to dso %s\n", dso_p->path);
+						err = -1;
+						goto elf_parse_cleanup;
+					}
+					dso_p->capacity = to_alloc;
 				}
 				struct dso_sym dso_sym_tmp = {
 					.addr = faddr
