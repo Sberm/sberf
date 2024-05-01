@@ -10,6 +10,7 @@ endif
 
 SBERF := sberf
 SRCDIR := src
+BPF_DIR := src/bpf
 OUTPUT ?= build
 SKEL_DIR := build_bpf
 BPFTOOL := bpftool
@@ -53,10 +54,11 @@ INCLUDE := -Ivmlinux -Isrc -I/usr/include
 # bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
 # llvm-strip去除tmp.bpf.o中的DWARF信息
 # bpftool生成bpf.o
-$(SKEL_DIR)/%.bpf.o: $(SRCDIR)/%.bpf.c $(SRCDIR)/$(wildcard %.h) $(VMLINUX) $(UTILS) | $(SKEL_DIR)
+$(SKEL_DIR)/%.bpf.o: $(BPF_DIR)/%.bpf.c $(SRCDIR)/$(wildcard %.h) $(VMLINUX) $(UTILS) | $(SKEL_DIR)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
-		-Ivmlinux -c $(filter $(SRCDIR)/%.bpf.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+		-Ivmlinux -I$(SRCDIR) -c $(filter $(BPF_DIR)/%.bpf.c, $^) \
+		-o $(patsubst %.bpf.o, %.tmp.bpf.o, $@)
 	$(Q)$(LLVM_STRIP) -g $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
