@@ -48,12 +48,6 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 	int err;
 	unsigned long long sample_time = 0;
 
-	/*
-	 * root
-	 * |_ child1(comm1)___ child2(comm2)___ child3(comm3)
-	 *      |_child11(sym11)     |_child21(sym21)
-	 */
-
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
 		if (stack_ag_p == NULL) {
 			/* initialize root stack aggregation pointer */

@@ -40,14 +40,17 @@ static int pink[] = {
 	0xF2789F,
 };
 
-static int colors[] = {
+static int flame[] = {
 	0xFFF78A,
 	0xFFE382,
 	0xFFC47E,
 	0xFFAD84,
 };
 
-static const char css[] = "<style type=\"text/css\">\ntext { font-size:12px; fill:rgb(0,0,0); }\n</style>\n";
+static const char css[] = "<style type=\"text/css\">\n"
+                          "text { font-size:12px; fill:rgb(0,0,0); }\n"
+						  "</style>\n";
+
 static const char js[] = "<script><![CDATA[\n"
 " function main(evt) {\n"
 "     let g = document.querySelectorAll('g');\n"
@@ -74,6 +77,8 @@ static const char js[] = "<script><![CDATA[\n"
 "]]></script>\n";
 
 int color_index = 0;
+int *color_palette;
+int color_palette_sz;
 
 int svg_sz = 65536;
 int svg_index = 0;
@@ -94,8 +99,8 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, float x, float len, in
 	float width = ((float)p->cnt / (float)p_cnt) * len;
 	float height = FRAME_HEIGHT;
 
-	int c = colors[color_index];
-	color_index = color_index + 1 > ARRAY_LEN(colors) - 1 ? 0 : color_index + 1;
+	int c = color_palette[color_index];
+	color_index = color_index + 1 > color_palette_sz - 1 ? 0 : color_index + 1;
 
 	char frame_title[128];
 
@@ -165,6 +170,9 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 		fclose(fp);
 		return -1;
 	}
+
+	color_palette = pink;
+	color_palette_sz = ARRAY_LEN(pink);
 	
 	/* write svg to svg_str */
 	__plot(p, p->cnt, x_st, max_width, depth_st, ksym_tb, usym_tb);
@@ -216,6 +224,9 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 		fclose(fp);
 		return -1;
 	}
+
+	color_palette = flame;
+	color_palette_sz = ARRAY_LEN(flame);
 	
 	/* write svg to svg_str */
 	__plot(p, p->cnt, x_st, max_width, depth_st, ksym_tb, usym_tb);
