@@ -31,7 +31,11 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 volatile bool enable;
 volatile bool spec_pid;
 
-struct task_struct__old {
+struct task_struct___new {
+    long __state;
+} __attribute__((preserve_access_index));
+
+struct task_struct___old {
     long state;
 } __attribute__((preserve_access_index));
 
@@ -56,15 +60,19 @@ struct {
 	__uint(max_entries, MAX_ENTRIES);
 } internal_map SEC(".maps");
 
-static inline int get_state(struct task_struct *ts)
+static inline int get_state(struct task_struct *__ts)
 {
-	int state;
-	if (bpf_core_field_exists(ts->__state)) {
-		state = BPF_CORE_READ(ts, __state);
+	int state = -1;
+
+	struct task_struct___new *ts_n = (void *)__ts;
+	struct task_struct___old *ts_o = (void *)__ts;
+
+	if (bpf_core_field_exists(struct task_struct___new, __state)) {
+		state = BPF_CORE_READ(ts_n, __state);
 	} else {
-		struct task_struct__old *ts_ = (void *)ts;
-		state = BPF_CORE_READ(ts_, state);
+		state = BPF_CORE_READ(ts_o, state);
 	}
+
 	return state;
 }
 
