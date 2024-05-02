@@ -662,7 +662,7 @@ int record_pid(int argc, char** argv, int index)
 			if (fd < 0) {
 				printf("Failed to open perf event for all process\n");
 			}
-			link =  bpf_program__attach_perf_event(skel->progs.profile, fd);
+			link = bpf_program__attach_perf_event(skel->progs.profile, fd);
 			if (link == NULL) {
 				printf("Failed to attach bpf program for all process\n");
 				goto cleanup;
@@ -873,6 +873,7 @@ int record_hardware(int argc, char** argv, int index)
 		.type = PERF_TYPE_HARDWARE,
 		.config = PERF_COUNT_HW_CPU_CYCLES,
 	};
+	struct bpf_link* link;
 
 	skel = event_bpf__open();
 	if (!skel) {
@@ -887,6 +888,12 @@ int record_hardware(int argc, char** argv, int index)
 	}
 
 	fd = syscall(__NR_perf_event_open, &attr, -1, 0, -1, PERF_FLAG_FD_CLOEXEC);
+
+	link = bpf_program__attach_perf_event(skel->progs.hardware, fd);
+	if (link == NULL) {
+		printf("Failed to attach hardware perf event\n");
+		goto cleanup;
+	}
 
 	err = event_bpf__attach(skel);
 	if (err) {
