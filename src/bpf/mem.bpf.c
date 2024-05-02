@@ -43,7 +43,7 @@ struct {
     __uint(max_entries, MAX_ENTRIES);
 } mem_usage SEC(".maps");
 
-bool spec_pid;
+volatile bool spec_pid;
 
 SEC("tp/syscalls/sys_enter_mmap")
 int mem_profile(struct arg* args)

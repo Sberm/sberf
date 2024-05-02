@@ -130,7 +130,7 @@ int sched_switch(u64 *ctx)
 		}
 	}
 
-	// next	
+	/* next	*/
 	tgid = BPF_CORE_READ(next, tgid);
 	pid = BPF_CORE_READ(next, pid);
 
@@ -145,7 +145,7 @@ int sched_switch(u64 *ctx)
 	id = bpf_map_lookup_elem(&internal_map, &key_n);
 
 	if (id && id->ts) {
-		struct off_cpu_key ok = {
+		struct off_cpu_key ok = { // ok stands for off_cpu key
 			.pid = pid,
 			.tgid = tgid,
 			.stack_id = id->stack_id,

@@ -38,6 +38,7 @@ volatile bool spec_pid = false;
 
 // init value for insertion into map
 static const u64 zero;
+static struct key_t key = {};
 
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
@@ -59,13 +60,11 @@ int profile(struct bpf_perf_event_data *ctx)
 	u64 id = bpf_get_current_pid_tgid();
 	u32 pid = id >> 32;
 
-	// if to trace only specific pids
 	if (spec_pid && filter_pid(pid))
 		return 0;
 
-	struct key_t key = {};
-
 	key.pid = pid;
+	// TODO: no comm from BPF side
 	bpf_get_current_comm(&key.comm, sizeof(key.comm));
 	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
 	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK);
@@ -73,9 +72,9 @@ int profile(struct bpf_perf_event_data *ctx)
 	u64* key_samp;
 	key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
 
-	if (key_samp)
+	if (key_samp) {
 		__sync_fetch_and_add(key_samp, 1);
-	else {
+	} else {
 		bpf_printk("Failed to look up stack sample");
 		return -1;
 	}

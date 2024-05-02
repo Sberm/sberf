@@ -27,26 +27,6 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 volatile bool enable;
 volatile bool spec_pid;
 
-struct common_fields {
-	unsigned short common_type;	
-	unsigned char common_flags;
-	unsigned char common_preempt_count;
-	int common_pid;
-};
-
-struct tp_args {
-	struct common_fields cf;
-	long syscall_nr;
-	u64 args[6];
-};
-
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__type(key, u32);
-	__type(value, u8);
-	__uint(max_entries, 512);
-} event_filter SEC(".maps");
-
 struct {
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
 	__type(key, u32);
@@ -66,15 +46,6 @@ struct {
 	__type(value, u64);
 	__uint(max_entries, MAX_EVENTS);
 } event_cnt SEC(".maps");
-
-// TODO: is it necessary
-static int inline filter_syscall_nr(long syscall_nr)
-{
-	if (!bpf_map_lookup_elem(&event_filter, &syscall_nr))
-		return 1;
-	else
-		return 0;
-}
 
 TP_TRGR(0)
 TP_TRGR(1)
