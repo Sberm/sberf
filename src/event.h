@@ -20,21 +20,21 @@
 #ifndef STAT_H
 #define STAT_H
 
-#define TP_TRGR(index)                                    \
-SEC("tp")                                                 \
-int tp_trgr_##index(void* ctx)                            \
-{                                                         \
+#define TP_TRGR(index)                                        \
+SEC("tp")                                                     \
+int tp_trgr_##index(void* ctx)                                \
+{                                                             \
 	u64 *cnt, pid_tgid = bpf_get_current_pid_tgid();      \
 	pid_t pid = pid_tgid >> 32;                           \
 	u32 zero = 0, key = (index);                          \
 	if (filter_pid(pid) && !enable)                       \
-		return 0;                                         \
+		return 0;                                     \
 	cnt = bpf_map_lookup_insert(&event_cnt, &key, &zero); \
 	if (cnt)                                              \
-		__sync_fetch_and_add(cnt, 1);                     \
+		__sync_fetch_and_add(cnt, 1);                 \
 	else                                                  \
-		return -1;                                        \
+		return -1;                                    \
 	return 0;                                             \
-}                                                         \
+}                                                             \
 
 #endif
