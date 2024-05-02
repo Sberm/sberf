@@ -32,8 +32,9 @@ static struct cmd_struct commands[] = {
 void print_help()
 {
 	char help_message[] = "\n  Usage:\n\n"
-                          "    sberf record <PID>\n"
-	                      "\n";
+			      "    sberf record <PID>\n"
+			      "\n";
+
 	printf("%s", help_message);
 }
 
