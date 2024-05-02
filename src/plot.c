@@ -48,7 +48,7 @@ static int flame[] = {
 };
 
 static const char css[] = "<style type=\"text/css\">\n"
-                          "text { font-size:12px; fill:rgb(0,0,0); }\n"
+						  "text { font-size:12px; fill:rgb(0,0,0); }\n"
 						  "</style>\n";
 
 static const char js[] = "<script><![CDATA[\n"
@@ -116,11 +116,11 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, float x, float len, in
 	char g_str[1024];
 
 	snprintf(g_str, sizeof(g_str), " <g>\n"
-	                               " <title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\""
+								   " <title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\""
 								   " width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\""
 								   " rx=\"2\" ry=\"2\" />\n"
-	                               " <text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
-	                               " </g>\n",
+								   " <text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
+								   " </g>\n",
 								   frame_title, width / max_width*100, x, y, width, height,
 								   c, x + 0.2, y + FRAME_HEIGHT - 4);
 
