@@ -22,12 +22,14 @@
 #include "bpf_util.h"
 #include "util.h"
 
+#define MAX_RAW_SYSCALL_ARGS 6
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-// TODO: change it to maps
-// specific pid
-volatile bool spec_pid = 0;
-volatile pid_t pids[MAX_PID] = {0};
+struct arg {
+	int syscall_nr;
+	unsigned long args[MAX_RAW_SYSCALL_ARGS];
+};
 
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
@@ -41,12 +43,7 @@ struct {
     __uint(max_entries, MAX_ENTRIES);
 } mem_usage SEC(".maps");
 
-#define MAX_RAW_SYSCALL_ARGS
-
-struct arg {
-	int syscall_nr;
-	unsigned long args[MAX_RAW_SYSCALL_ARGS];
-};
+bool spec_pid;
 
 SEC("tp/syscalls/sys_enter_mmap")
 int mem_profile(struct arg* args)
@@ -54,20 +51,8 @@ int mem_profile(struct arg* args)
 	u64 id = bpf_get_current_pid_tgid();
 	u32 pid = id >> 32;
 
-	// if to trace only specific pids
-	if (spec_pid) {
-		int i;
-		for (i = 0;i < ARRAY_LEN(pids); i++) {
-			if (pids[i] == 0)
-				return 0;
-			if (pids[i] == pid)
-				break;
-		}
-		/* didn't match through the whole pids array */
-		if (i == ARRAY_LEN(pids))
-			return 0;
-	}
-
+	if (filter_pid(pid))
+		return 0;
 	
 	bpf_printk("allocated %dKB", args->args[1] / 1000);
 

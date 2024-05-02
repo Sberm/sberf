@@ -27,7 +27,6 @@
 
 static struct cmd_struct commands[] = {
 	{"record", cmd_record},
-	// {"stat", cmd_stat},
 };
 
 void print_help()

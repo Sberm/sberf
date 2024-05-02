@@ -49,7 +49,7 @@
 #include "off_cpu.h"
 
 #define TP_TRGR_PROG(index) skel->progs.tp_trgr_##index
-#define MAX_TP_TRGR_PROG 6
+#define MAX_TP_TRGR_PROG 10
 
 /* global variables for perf poll */
 static struct ksyms *record__ksym_tb;
@@ -519,6 +519,10 @@ int record_tracepoint(int argc, char** argv, int index)
 		TP_TRGR_PROG(3),
 		TP_TRGR_PROG(4),
 		TP_TRGR_PROG(5),
+		TP_TRGR_PROG(6),
+		TP_TRGR_PROG(7),
+		TP_TRGR_PROG(8),
+		TP_TRGR_PROG(9),
 	};
 
 	if (env.all_p)

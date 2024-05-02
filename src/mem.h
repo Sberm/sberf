@@ -20,7 +20,7 @@
 #ifndef MEM_H
 #define MEM_H
 
-#define MAX_ENTRIES 10240
+#define MAX_ENTRIES 204800
 #define MAX_PID 64
 
 #endif
