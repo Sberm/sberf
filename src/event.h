@@ -20,10 +20,6 @@
 #ifndef STAT_H
 #define STAT_H
 
-#define MAX_ENTRIES 204800
-#define MAX_STACKS 32
-#define MAX_EVENTS 1500
-
 #define TP_TRGR(index)                                    \
 SEC("tp")                                                 \
 int tp_trgr_##index(void* ctx)                            \
@@ -40,9 +36,5 @@ int tp_trgr_##index(void* ctx)                            \
 		return -1;                                        \
 	return 0;                                             \
 }                                                         \
-
-struct stack_array {
-	unsigned long array[MAX_STACKS];
-};
 
 #endif

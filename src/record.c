@@ -93,6 +93,8 @@ static struct func_struct record_func[] = {
 	{"-h", record_print_help},
 	{"--help", record_print_help},
 	{"--numa", record_numa},
+	{"-hw", record_hardware},
+	{"--hardware", record_hardware},
 };
 
 // TODO: refactor, delete the duplicates
@@ -371,6 +373,7 @@ int cmd_record(int argc, char **argv)
 	return err;
 }
 
+/*
 void syscall_handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
 	struct stack_array *sa = data;
@@ -381,9 +384,12 @@ void syscall_handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	}
 	printf("\n");
 }
+*/
 
 int record_syscall(int argc, char** argv, int index)
 {
+	return 0;
+	/*
 	struct event_bpf *skel;
 	int err = 0, event_num, fd, one = 1;
 	struct perf_buffer *pb = NULL;
@@ -440,7 +446,6 @@ int record_syscall(int argc, char** argv, int index)
 	if (pb == NULL)
 		goto sym_pb_cleanup;
 
-	/* syscall */
 	struct bpf_link *link = NULL;
 	for (int i = 0;i < event_num;i++) {
 		link = bpf_program__attach_ksyscall(skel->progs.syscall_trgr, event_names[i], NULL);
@@ -471,6 +476,7 @@ sym_pb_cleanup:
 cleanup:
 	event_bpf__destroy(skel);
 	return err;
+	*/
 }
 
 int record_tracepoint(int argc, char** argv, int index)
@@ -855,4 +861,58 @@ cleanup:
 int record_numa(int argc, char** argv, int index)
 {
 	return 0;
+}
+
+int record_hardware(int argc, char** argv, int index)
+{
+	struct event_bpf *skel;
+	int fd, err = 0;
+	__u32 zero = 0;
+	__u64 cnt;
+	struct perf_event_attr attr = {
+		.type = PERF_TYPE_HARDWARE,
+		.config = PERF_COUNT_HW_CPU_CYCLES,
+	};
+
+	skel = event_bpf__open();
+	if (!skel) {
+		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
+		return 1;
+	}
+
+	err = event_bpf__load(skel);
+	if (err) {
+		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
+		goto cleanup;
+	}
+
+	fd = syscall(__NR_perf_event_open, &attr, -1, 0, -1, PERF_FLAG_FD_CLOEXEC);
+
+	err = event_bpf__attach(skel);
+	if (err) {
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
+
+	skel->bss->enable = true;
+
+	signal(SIGINT, signalHandler);
+
+	for(;!done;){};
+
+	skel->bss->enable = false;
+
+	fd = bpf_map__fd(skel->maps.hw_cnt);
+	if (fd < 0) {
+		printf("Failed to find fd of hardware counting map\n");
+		goto cleanup;
+	}
+
+	err = bpf_map_lookup_elem(fd, &zero, &cnt);
+
+	printf("cnt: %llu\n", cnt);
+
+cleanup:
+	event_bpf__destroy(skel);
+	return err;
 }

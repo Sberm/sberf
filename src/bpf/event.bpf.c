@@ -22,10 +22,19 @@
 #include "bpf_util.h"
 #include "util.h"
 
+#define MAX_ENTRIES 204800
+#define MAX_STACKS 32
+#define MAX_EVENTS 10
+#define MAX_HW 10
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 volatile bool enable;
 volatile bool spec_pid;
+
+struct stack_array {
+	unsigned long array[MAX_STACKS];
+};
 
 struct {
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
@@ -47,6 +56,13 @@ struct {
 	__uint(max_entries, MAX_EVENTS);
 } event_cnt SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, __u32);
+	__type(value, __u64);
+	__uint(max_entries, MAX_HW);
+} hw_cnt SEC(".maps");
+
 TP_TRGR(0)
 TP_TRGR(1)
 TP_TRGR(2)
@@ -57,6 +73,26 @@ TP_TRGR(6)
 TP_TRGR(7)
 TP_TRGR(8)
 TP_TRGR(9)
+
+
+SEC("perf_event")
+int hardware(void *ctx)
+{
+	if (!enable)
+		return 0;
+
+	__u64 *cnt, zero = 0;
+	__u32 key = 0;
+
+	cnt = bpf_map_lookup_insert(&hw_cnt, &key, &zero);
+	if (cnt) {
+		__sync_fetch_and_add(cnt, 1);
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
 
 SEC("ksyscall")
 int syscall_trgr(void *ctx)
