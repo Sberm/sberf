@@ -1,7 +1,7 @@
 /*-*- coding:utf-8                                                          -*-│
-│vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
+│vi: set ft=c ts=8 sts=8 sw=8 fenc=utf-8                                    :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2023 Howard Chu                                                    │
+│ Copyright 2024 Howard Chu                                                    │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+
 #ifndef CLI_H
 #define CLI_H
 

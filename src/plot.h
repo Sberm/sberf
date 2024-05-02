@@ -1,5 +1,5 @@
 /*-*- coding:utf-8                                                          -*-│
-│vi: set net ft=c ts=4 sts=4 sw=4 fenc=utf-8                                :vi│
+│vi: set ft=c ts=8 sts=8 sw=8 fenc=utf-8                                    :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
 │ Copyright 2024 Howard Chu                                                    │
 │                                                                              │
