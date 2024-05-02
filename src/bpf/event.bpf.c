@@ -78,6 +78,8 @@ TP_TRGR(9)
 SEC("perf_event")
 int hardware(void *ctx)
 {
+	bpf_printk("h");
+
 	if (!enable)
 		return 0;
 

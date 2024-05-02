@@ -887,7 +887,7 @@ int record_hardware(int argc, char** argv, int index)
 		goto cleanup;
 	}
 
-	fd = syscall(__NR_perf_event_open, &attr, -1, 0, -1, PERF_FLAG_FD_CLOEXEC);
+	fd = syscall(__NR_perf_event_open, &attr, 0, -1, -1, PERF_FLAG_FD_CLOEXEC);
 
 	link = bpf_program__attach_perf_event(skel->progs.hardware, fd);
 	if (link == NULL) {
