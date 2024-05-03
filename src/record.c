@@ -28,6 +28,7 @@
 #include <stdbool.h>
 
 #include <sys/syscall.h>
+#include <sys/ioctl.h>
 #define __USE_MISC
 #define _GNU_SOURCE
 #include <unistd.h>
@@ -49,7 +50,7 @@
 #include "off_cpu.h"
 
 #define TP_TRGR_PROG(index) skel->progs.tp_trgr_##index
-#define MAX_TP_TRGR_PROG 10
+#define MAX_TP_TRGR_PROG 10 // max tracepoint trigger program
 
 /* global variables for perf poll */
 static struct ksyms *record__ksym_tb;
@@ -66,7 +67,7 @@ static struct {
 	char pids[256];
 	int all_p;
 	char svg_file_name[256];
-	char event_names_str[512];
+	char tmp_str[512];
 	bool debug;
 } env = {
 	.freq = 1,
@@ -75,7 +76,7 @@ static struct {
 	.pids = "\0", 
 	.all_p = false,
 	.svg_file_name = "debug.svg",
-	.event_names_str = "\0",
+	.tmp_str = "\0",
 	.debug = false,
 };
 
@@ -99,38 +100,55 @@ static struct func_struct record_func[] = {
 
 // TODO: refactor, delete the duplicates
 // TODO: change them to enums
+
+#define COMMON_ENV                   \
+	{"-f", INT, &env.sample_freq},   \
+	{"-np", MGL, &env.no_plot},      \
+	{"-a", MGL, &env.all_p},         \
+	{"-p", STR, &env.pids},          \
+	{"-o", STR, &env.svg_file_name}, \
+
 static struct env_struct pid_env[] = {
-	{"-f", 0, &env.sample_freq},
-	{"-np", 4, &env.no_plot},
-	{"-a", 4, &env.all_p},
-	{"-p", 1, &env.pids},
-	{"-o", 1, &env.svg_file_name},
+	COMMON_ENV
 };
 
 static struct env_struct event_env[] = {
-	{"-f", 0, &env.sample_freq},
-	{"-np", 4, &env.no_plot},
-	{"-a", 4, &env.all_p},
-	{"-p", 1, &env.pids},
-	{"-o", 1, &env.svg_file_name},
-	{"-s", 1, &env.event_names_str},
-	{"-t", 1, &env.event_names_str},
+	COMMON_ENV
+	{"-s", STR, &env.tmp_str},
+	{"-t", STR, &env.tmp_str},
 };
 
 static struct env_struct mem_env[] = {
-	{"-f", 0, &env.sample_freq},
-	{"-np", 4, &env.no_plot},
-	{"-a", 4, &env.all_p},
-	{"-p", 1, &env.pids},
-	{"-o", 1, &env.svg_file_name},
+	COMMON_ENV
 };
 
 static struct env_struct off_cpu_env[] = {
-	{"-f", 0, &env.sample_freq},
-	{"-np", 4, &env.no_plot},
-	{"-a", 4, &env.all_p},
-	{"-p", 1, &env.pids},
-	{"-o", 1, &env.svg_file_name},
+	COMMON_ENV
+};
+
+static struct env_struct hardware_env[] = {
+	COMMON_ENV
+	{"-hw", STR, &env.tmp_str},
+};
+
+
+struct hardware_mapping {
+	char type_name[32];
+	__u32 type;
+};
+
+#define MAX_HARDWARE 16
+
+static struct hardware_mapping hardware_map[] = {
+	{"cycles", PERF_COUNT_HW_CPU_CYCLES},
+	{"cpu-cycles", PERF_COUNT_HW_CPU_CYCLES},
+	{"instructions", PERF_COUNT_HW_INSTRUCTIONS},
+	{"branches", PERF_COUNT_HW_BRANCH_INSTRUCTIONS},
+	{"branch-misses", PERF_COUNT_HW_BRANCH_MISSES},
+	{"bus-cycles", PERF_COUNT_HW_BUS_CYCLES},
+	{"stalled-cycles-front", PERF_COUNT_HW_STALLED_CYCLES_FRONTEND},
+	{"stalled-cycles-back", PERF_COUNT_HW_STALLED_CYCLES_BACKEND},
+	{"ref-cycles", PERF_COUNT_HW_REF_CPU_CYCLES},
 };
 
 struct tp_name {
@@ -141,6 +159,16 @@ struct tp_name {
 static void signalHandler(int signum)
 {
 	done = true;
+}
+
+int parse_hardware_flag(char *str)
+{
+	for (int i = 0; i < ARRAY_LEN(hardware_map); i++) {
+		if (strcmp(str, hardware_map[i].type_name) == 0) {
+			return hardware_map[i].type;
+		}
+	}
+	return -1;
 }
 
 // TODO: use enum
@@ -216,9 +244,11 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 		last_key = cur_key;
 	} 
 
-	free(frame);
-
 	printf("Collected %d samples\n", sample_num_total);
+
+	free(frame);
+	close(stack_map_fd);
+	close(sample_fd);
 }
 
 void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data, struct ksyms* ksym_tb, struct usyms* usym_tb)
@@ -252,15 +282,17 @@ void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data
 		last_key = cur_key;
 	} 
 
-	free(frame);
-
 	printf("Collected %d off-cpu samples\n", sample_num_total);
+
+	free(frame);
+	close(stack_map_fd);
+	close(off_cpu_data_fd);
 }
 
 int split_event_str() {
 	char *token;
 	size_t index = 0;
-	token = strtok(env.event_names_str, ",");
+	token = strtok(env.tmp_str, ",");
 	while( token != NULL && index < ARRAY_LEN(event_names)) {
 		strcpy(event_names[index++], token);
 		token = strtok(NULL, ",");
@@ -474,6 +506,7 @@ sym_pb_cleanup:
 	perf_buffer__free(pb);
 
 cleanup:
+	close(fd);
 	event_bpf__destroy(skel);
 	return err;
 	*/
@@ -594,6 +627,7 @@ int record_tracepoint(int argc, char** argv, int index)
 	printf("\n");
 
 cleanup:
+	close(fd);
 	event_bpf__destroy(skel);
 	return err;
 }
@@ -815,6 +849,8 @@ int record_off_cpu(int argc, char** argv, int index)
 	for (int i = 0;i < pid_nr;i++)
 		bpf_map_update_elem(fd, &pids[i], &one, BPF_ANY);
 
+	close(fd);
+
 	err = off_cpu_bpf__attach(skel);
 	if (err) {
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
@@ -866,60 +902,91 @@ int record_numa(int argc, char** argv, int index)
 int record_hardware(int argc, char** argv, int index)
 {
 	struct event_bpf *skel;
-	int fd, err = 0;
-	__u32 zero = 0;
-	__u64 cnt;
-	struct perf_event_attr attr = {
-		.type = PERF_TYPE_HARDWARE,
-		.config = PERF_COUNT_HW_CPU_CYCLES,
-	};
 	struct bpf_link* link;
+	struct perf_event_attr attr;
+	int fds[MAX_HARDWARE], event_num, flag, err = 0, k = 0, cpu_nr = 1;
+	bool default_hw = false;
+	__u64 cnt[MAX_HARDWARE] = {0};
+	int default_tmp[] = {PERF_COUNT_HW_CPU_CYCLES,
+				 		 PERF_COUNT_HW_INSTRUCTIONS,
+				 		 PERF_COUNT_HW_BRANCH_INSTRUCTIONS,
+				 		 PERF_COUNT_HW_BRANCH_MISSES};
 
-	skel = event_bpf__open();
-	if (!skel) {
-		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
-		return 1;
+	memset(&attr, 0, sizeof(attr));
+	attr.type = PERF_TYPE_HARDWARE;
+	attr.disabled = 1;
+
+	parse_opts_env(argc, argv, index, hardware_env, ARRAY_LEN(hardware_env));
+
+	event_num = split_event_str();
+
+	if (event_num == 0)
+		default_hw = true;
+
+	for (int i = 0; i < MAX_HARDWARE && i < event_num; i++) {
+		flag = parse_hardware_flag(event_names[i]);
+		if (flag != -1) {
+			attr.config = flag;
+			for (int j = 0; j < cpu_nr; j++) {
+				fds[k] = syscall(__NR_perf_event_open, &attr, j, -1, -1, 0);
+				if (fds[k] < 0) {
+					printf("Failed to open perf event for %s\n", event_names[i]);
+					goto cleanup;
+				}
+				
+				ioctl(fds[k], PERF_EVENT_IOC_RESET, 0);
+				ioctl(fds[k], PERF_EVENT_IOC_ENABLE, 0);
+				++k;
+			}
+		}
 	}
 
-	err = event_bpf__load(skel);
-	if (err) {
-		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
-		goto cleanup;
+	if (default_hw) {
+		for (int i = 0; i < ARRAY_LEN(default_tmp); i++) {
+			attr.config = default_tmp[i];
+			for (int j = 0; j < cpu_nr; j++) {
+				fds[k] = syscall(__NR_perf_event_open, &attr, j, -1, -1, 0);
+				if (fds[k] < 0)
+					goto cleanup;
+				
+				ioctl(fds[k], PERF_EVENT_IOC_RESET, 0);
+				ioctl(fds[k], PERF_EVENT_IOC_ENABLE, 0);
+				++k;
+			}
+		}
 	}
-
-	fd = syscall(__NR_perf_event_open, &attr, 0, -1, -1, PERF_FLAG_FD_CLOEXEC);
-
-	link = bpf_program__attach_perf_event(skel->progs.hardware, fd);
-	if (link == NULL) {
-		printf("Failed to attach hardware perf event\n");
-		goto cleanup;
-	}
-
-	err = event_bpf__attach(skel);
-	if (err) {
-		fprintf(stderr, "Failed to attach BPF skeleton\n");
-		goto cleanup;
-	}
-
-	skel->bss->enable = true;
 
 	signal(SIGINT, signalHandler);
 
-	for(;!done;){};
+	for (; !done;) {}
 
-	skel->bss->enable = false;
+	printf("\n\n");
+	printf("  %-20s %-64s\n\n", "hardware-event", "count");
 
-	fd = bpf_map__fd(skel->maps.hw_cnt);
-	if (fd < 0) {
-		printf("Failed to find fd of hardware counting map\n");
-		goto cleanup;
+	for (int i = 0; !default_hw && i < k; i++) {
+		ioctl(fds[i], PERF_EVENT_IOC_DISABLE, 0);
+		read(fds[i], &cnt[i], sizeof(cnt[0]));
+		
+		printf("  %-20s %-64llu\n", event_names[i], cnt[i]);
 	}
 
-	err = bpf_map_lookup_elem(fd, &zero, &cnt);
+	if (default_hw) {
+		for (int i = 0; i < ARRAY_LEN(default_tmp); i++) {
+			ioctl(fds[i], PERF_EVENT_IOC_DISABLE, 0);
+			read(fds[i], &cnt[i], sizeof(cnt[0]));
+		}
 
-	printf("cnt: %llu\n", cnt);
+		printf("  %-20s %-64llu\n", "cycles", cnt[0]);
+		printf("  %-20s %-64llu\n", "instructions", cnt[1]);
+		printf("  %-20s %-64llu\n", "branches", cnt[2]);
+		printf("  %-20s %-64llu\n", "branch-misses", cnt[3]);
+	}
+
+	printf("\n");
 
 cleanup:
-	event_bpf__destroy(skel);
+	for (int i = 0; i < k; i++)
+		close(fds[i]);
+
 	return err;
 }
