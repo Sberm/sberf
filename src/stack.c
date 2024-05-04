@@ -41,13 +41,13 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 
 	int stack_map_fd = bpf_map__fd(stack_map);
 	int sample_fd = bpf_map__fd(sample);
+	int err;
 
 	struct off_cpu_key a = {}, b = {};
 	struct off_cpu_key *last_key = &a;
 	struct off_cpu_key *cur_key = &b;
 
 	unsigned long long *frame = calloc(MAX_STACK_DEPTH, sizeof(unsigned long long));
-	int err;
 	unsigned long long sample_time = 0;
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
@@ -67,7 +67,9 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 		if (DEBUG && err) {
 			printf("\n[user stack lost]\n");
 		} else {
-			stack_insert(stack_ag_p, frame, sample_time, MAX_STACK_DEPTH);
+			stack_ag_p->cnt += sample_time;
+			comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
+			stack_insert(comm_p, frame, sample_time, MAX_STACK_DEPTH);
 		}
 
 		last_key = cur_key;
@@ -83,6 +85,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 
 	int stack_map_fd = bpf_map__fd(stack_map);
 	int sample_fd = bpf_map__fd(sample);
+	int err;
 
 	struct key_t a = {}, b = {};
 	struct key_t *last_key = &a;
@@ -91,7 +94,6 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 	unsigned long long *frame = calloc(MAX_STACK_DEPTH, 
 					   sizeof(unsigned long long)), 
 		      		    sample_num = 0;
-	int err;
 
 	/*
 	 * root

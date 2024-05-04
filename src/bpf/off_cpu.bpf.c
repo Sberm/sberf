@@ -150,6 +150,9 @@ int sched_switch(u64 *ctx)
 			.tgid = tgid,
 			.stack_id = id->stack_id,
 		};
+
+		// TODO: delete this crap
+		bpf_get_current_comm(&ok.comm, sizeof(ok.comm));
 		
 		u64* total = bpf_map_lookup_insert(&off_cpu_time, &ok, &zero);
 		if (total) {

@@ -81,15 +81,20 @@ int color_index = 0;
 int *color_palette;
 int color_palette_sz;
 
+char* svg_str;
 int svg_sz = 65536;
 int svg_index = 0;
-char* svg_str;
 
-const double max_width = 1200;
+#define MAX_WIDTH 1200.0
 double max_height = 0;
 
-const double x_st = 10;
-const int depth_st = 0;
+// x start
+#define X_ST 10.0
+
+enum PLOT_MODE {
+	PLOT_CYCLE,
+	PLOT_OFF_CPU,
+} plot_mode;
 
 void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, int depth, struct ksyms* ksym_tb, struct usyms* usym_tb)
 {
@@ -101,10 +106,10 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, 
 	double height = FRAME_HEIGHT;
 	int c = color_palette[color_index];
 	char frame_title[128];
+	char g_str[1024];
 
 	color_index = color_index + 1 > color_palette_sz - 1 ? 0 : color_index + 1;
 
-	/* find symbol of current frame's address */
 	if (p->addr == 0 && !p->is_comm) {
 		strcpy(frame_title, "all");
 	} else if (p->is_comm) {
@@ -113,16 +118,31 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, 
 		addr_to_sym(ksym_tb, usym_tb, p->addr, frame_title);
 	}
 
-	char g_str[1024];
-
-	snprintf(g_str, sizeof(g_str), " <g>\n"
-				       " <title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\""
-				       " width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\""
-				       " rx=\"2\" ry=\"2\" />\n"
-				       " <text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
-				       " </g>\n",
-				       frame_title, width / max_width*100, x, y, width, height,
-				       c, x + 0.2, y + FRAME_HEIGHT - 4);
+	switch (plot_mode) {
+	case PLOT_CYCLE:
+		snprintf(g_str, sizeof(g_str), " <g>\n"
+					       " <title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\""
+					       " width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\""
+					       " rx=\"2\" ry=\"2\" />\n"
+					       " <text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
+					       " </g>\n",
+					       frame_title, width / MAX_WIDTH * 100, x, y, width, height,
+					       c, x + 0.2, y + FRAME_HEIGHT - 4);
+		break;
+	case PLOT_OFF_CPU:
+		snprintf(g_str, sizeof(g_str), " <g>\n"
+					       " <title>%s (%.3fs)</title><rect x=\"%.2f\" y=\"%.2f\""
+					       " width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\""
+					       " rx=\"2\" ry=\"2\" />\n"
+					       " <text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
+					       " </g>\n",
+					       frame_title, ((double)p->cnt / 1000000000ULL), x, y, width, height,
+					       c, x + 0.2, y + FRAME_HEIGHT - 4);
+		break;
+	default:
+		break;
+	}
+	
 
 	/* realloc just like a stl vector */
 	if (svg_index + strlen(g_str) >= svg_sz) {
@@ -133,10 +153,8 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, 
 	strcpy(svg_str + svg_index , g_str);
 	svg_index += strlen(g_str);
 
-	/* brothers */
 	__plot(p->next, p_cnt, x + width, len, depth, ksym_tb, usym_tb);
 
-	/* children */
 	__plot(p->child, p->cnt, x, width, depth + 1, ksym_tb, usym_tb);
 }
 
@@ -171,10 +189,12 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 	color_palette = pink;
 	color_palette_sz = ARRAY_LEN(pink);
 	
+	plot_mode = PLOT_OFF_CPU;
+	
 	/* write svg to svg_str */
-	__plot(p, p->cnt, x_st, max_width, depth_st, ksym_tb, usym_tb);
+	__plot(p, p->cnt, X_ST, MAX_WIDTH, 0, ksym_tb, usym_tb);
 
-	fprintf(fp, "<svg version=\"1.1\" width=\"%.0f\" height=\"%.0f\" onload=\"main(evt)\" viewBox=\"0 0 %.0f %.0f\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", max_width + 18, max_height + 18, max_width + 18, max_height + 18);
+	fprintf(fp, "<svg version=\"1.1\" width=\"%.0f\" height=\"%.0f\" onload=\"main(evt)\" viewBox=\"0 0 %.0f %.0f\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", MAX_WIDTH + 5, max_height + 5, MAX_WIDTH + 5, max_height + 5);
 
 	fputs(css, fp);
 	fputs(js, fp);
@@ -221,10 +241,12 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 
 	color_palette = flame;
 	color_palette_sz = ARRAY_LEN(flame);
-	
-	__plot(p, p->cnt, x_st, max_width, depth_st, ksym_tb, usym_tb);
 
-	fprintf(fp, "<svg version=\"1.1\" width=\"%.0f\" height=\"%.0f\" onload=\"main(evt)\" viewBox=\"0 0 %.0f %.0f\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", max_width + 18, max_height + 18, max_width + 18, max_height + 18);
+	plot_mode = PLOT_CYCLE;
+	
+	__plot(p, p->cnt, X_ST, MAX_WIDTH, 0, ksym_tb, usym_tb);
+
+	fprintf(fp, "<svg version=\"1.1\" width=\"%.0f\" height=\"%.0f\" onload=\"main(evt)\" viewBox=\"0 0 %.0f %.0f\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", MAX_WIDTH + 18, max_height + 18, MAX_WIDTH + 18, max_height + 18);
 
 	fputs(css, fp);
 	fputs(js, fp);

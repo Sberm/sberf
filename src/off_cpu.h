@@ -22,12 +22,14 @@
 
 #define MAX_ENTRIES 204800
 #define MAX_STACKS 32
+#define TASK_COMM_LEN 16
 
 // user-space fetching
 struct off_cpu_key {
 	int pid;
 	int tgid;
 	int stack_id;
+	char comm[TASK_COMM_LEN];
 };
 
 // BPF-side handling
