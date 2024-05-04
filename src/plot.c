@@ -19,6 +19,7 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <limits.h>
 #include "stack.h"
 #include "plot.h"
 #include "util.h"
@@ -84,25 +85,24 @@ int svg_sz = 65536;
 int svg_index = 0;
 char* svg_str;
 
-const float max_width = 1200;
-float max_height = 0;
+const double max_width = 1200;
+double max_height = 0;
 
-const float x_st = 10;
+const double x_st = 10;
 const int depth_st = 0;
 
-void __plot(struct stack_ag* p, unsigned long long p_cnt, float x, float len, int depth, struct ksyms* ksym_tb, struct usyms* usym_tb)
+void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, int depth, struct ksyms* ksym_tb, struct usyms* usym_tb)
 {
 	if (p == NULL)
 		return;
 
-	float y = depth * FRAME_HEIGHT;
-	float width = ((float)p->cnt / (float)p_cnt) * len;
-	float height = FRAME_HEIGHT;
-
+	double y = depth * FRAME_HEIGHT;
+	double width = ((double)p->cnt / (double)p_cnt) * len;
+	double height = FRAME_HEIGHT;
 	int c = color_palette[color_index];
-	color_index = color_index + 1 > color_palette_sz - 1 ? 0 : color_index + 1;
-
 	char frame_title[128];
+
+	color_index = color_index + 1 > color_palette_sz - 1 ? 0 : color_index + 1;
 
 	/* find symbol of current frame's address */
 	if (p->addr == 0 && !p->is_comm) {
@@ -142,9 +142,7 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, float x, float len, in
 
 int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 {
-	/* kernel symbol table */
 	struct ksyms* ksym_tb;
-	/* user symbol table */
 	struct usyms* usym_tb;
 
 	if (p == NULL)
@@ -152,7 +150,6 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 
 	max_height = stack_get_depth(p) * FRAME_HEIGHT;
 
-	/* symbol table */
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);
 	if (ksym_tb == NULL || usym_tb == NULL) {
@@ -196,9 +193,7 @@ cleanup:
 
 int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 {
-	/* kernel symbol table */
 	struct ksyms* ksym_tb;
-	/* user symbol table */
 	struct usyms* usym_tb;
 
 	if (p == NULL)
@@ -206,7 +201,6 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 
 	max_height = stack_get_depth(p) * FRAME_HEIGHT;
 
-	/* symbol table */
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);
 	if (ksym_tb == NULL || usym_tb == NULL) {
@@ -228,14 +222,13 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 	color_palette = flame;
 	color_palette_sz = ARRAY_LEN(flame);
 	
-	/* write svg to svg_str */
 	__plot(p, p->cnt, x_st, max_width, depth_st, ksym_tb, usym_tb);
 
 	fprintf(fp, "<svg version=\"1.1\" width=\"%.0f\" height=\"%.0f\" onload=\"main(evt)\" viewBox=\"0 0 %.0f %.0f\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n", max_width + 18, max_height + 18, max_width + 18, max_height + 18);
 
 	fputs(css, fp);
 	fputs(js, fp);
-	fputs(svg_str, fp); // use fprintf here will cause seg fault
+	fputs(svg_str, fp); // use fprintf here will cause SEGV
 
 	fprintf(fp, "</svg>\n");
 

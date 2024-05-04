@@ -62,7 +62,7 @@ static volatile bool done;
 static struct {
 	int freq;
 	unsigned long long sample_freq; 
-	int no_plot;
+	bool no_plot;
 	int rec_all;
 	char pids[256];
 	int all_p;
@@ -72,7 +72,7 @@ static struct {
 } env = {
 	.freq = 1,
 	.sample_freq = 69,
-	.no_plot = 0,
+	.no_plot = false,
 	.pids = "\0", 
 	.all_p = false,
 	.svg_file_name = "debug.svg",
@@ -236,7 +236,7 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 		}
 
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->user_stack_id, frame);
-		if (err)
+		if (env.debug && err)
 			printf("\n[user stack lost]\n");
 		else
 			print_stack_frame(frame, sample_num, 'u', usym_tb);
@@ -251,7 +251,7 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 	close(sample_fd);
 }
 
-void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data, struct ksyms* ksym_tb, struct usyms* usym_tb)
+void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data, struct ksyms* _, struct usyms* usym_tb)
 {
 	int stack_map_fd = bpf_map__fd(stack_map);
 	int off_cpu_data_fd = bpf_map__fd(off_cpu_data);
@@ -738,18 +738,18 @@ int record_pid(int argc, char** argv, int index)
 
 	for (;!done;){}
 
-	if (env.no_plot == 1) {
+	if (env.no_plot) {
 		ksym_tb = ksym_load();
 		usym_tb = usym_load(pids, pid_nr);
 
-		if (ksym_tb && usym_tb)
+		if (env.debug && ksym_tb && usym_tb)
 			printf("\nSymbols loaded\n");
 
 		print_stack(skel->maps.stack_map, skel->maps.sample, ksym_tb, usym_tb);
 
 		ksym_free(ksym_tb);
 		usym_free(usym_tb);
-	} else if (env.no_plot == 0){
+	} else {
 		record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
 	}
 
@@ -870,20 +870,22 @@ int record_off_cpu(int argc, char** argv, int index)
 
 	skel->bss->enable = false;
 
-	if (env.no_plot == 1) {
-		ksym_tb = ksym_load();
+	if (env.no_plot) {
 		usym_tb = usym_load(pids, pid_nr);
+		if (usym_tb == NULL) {
+			printf("Failed to load off-cpu symbol table\n");
+			goto cleanup;
+		}
 
-		printf("table len %d\n", usym_tb->length);
+		if (env.debug && usym_tb) {
+			printf("\nsymbols loaded\n");
+			printf("symbol table len %d\n", usym_tb->length);
+		}
 
-		if (ksym_tb && usym_tb)
-			printf("\nSymbols loaded\n");
+		print_stack_off_cpu(skel->maps.stacks, skel->maps.off_cpu_time, NULL, usym_tb);
 
-		print_stack_off_cpu(skel->maps.stacks, skel->maps.off_cpu_time, ksym_tb, usym_tb);
-
-		ksym_free(ksym_tb);
 		usym_free(usym_tb);
-	} else if (env.no_plot == 0){
+	} else {
 		record_plot_off_cpu(skel->maps.stacks, skel->maps.off_cpu_time, pids, pid_nr);
 	}
 
@@ -908,9 +910,9 @@ int record_hardware(int argc, char** argv, int index)
 	bool default_hw = false;
 	__u64 cnt[MAX_HARDWARE] = {0};
 	int default_tmp[] = {PERF_COUNT_HW_CPU_CYCLES,
-				 		 PERF_COUNT_HW_INSTRUCTIONS,
-				 		 PERF_COUNT_HW_BRANCH_INSTRUCTIONS,
-				 		 PERF_COUNT_HW_BRANCH_MISSES};
+			     PERF_COUNT_HW_INSTRUCTIONS,
+			     PERF_COUNT_HW_BRANCH_INSTRUCTIONS,
+			     PERF_COUNT_HW_BRANCH_MISSES};
 
 	memset(&attr, 0, sizeof(attr));
 	attr.type = PERF_TYPE_HARDWARE;

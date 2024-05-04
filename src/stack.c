@@ -25,6 +25,8 @@
 #include "util.h"
 #include "off_cpu.h"
 
+#define DEBUG false
+
 int stack_walk(struct stack_ag* p)
 {
 	if (p == NULL)
@@ -62,11 +64,9 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 		bpf_map_lookup_elem(sample_fd, cur_key, &sample_time);
 
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->stack_id, frame);
-		if (err)
+		if (DEBUG && err) {
 			printf("\n[user stack lost]\n");
-		else {
-			stack_ag_p->cnt += sample_time;
-			// comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
+		} else {
 			stack_insert(stack_ag_p, frame, sample_time, MAX_STACK_DEPTH);
 		}
 
@@ -88,9 +88,10 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 	struct key_t *last_key = &a;
 	struct key_t *cur_key = &b;
 
-	unsigned long long *frame = calloc(MAX_STACK_DEPTH, sizeof(unsigned long long));
+	unsigned long long *frame = calloc(MAX_STACK_DEPTH, 
+					   sizeof(unsigned long long)), 
+		      		    sample_num = 0;
 	int err;
-	int sample_num = 0;
 
 	/*
 	 * root
@@ -125,7 +126,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 		}
 
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->user_stack_id, frame);
-		if (err)
+		if (DEBUG && err)
 			printf("\n[user stack lost]\n");
 		else {
 			stack_ag_p->cnt += sample_num;
@@ -185,7 +186,7 @@ struct stack_ag *comm_lookup_insert(struct stack_ag *stack_ag_p, char* comm)
 	return p_parent;
 }
 
-int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sample_num, int frame_sz)
+int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, unsigned long long sample_num, int frame_sz)
 {
 	int err = 0;
 
@@ -199,7 +200,7 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 	int index = 0;
 	struct stack_ag *p_parent = NULL;
 
-	/* add one for the root frame */
+	/* root frame */
 	p->cnt += sample_num;
 
 	/* every stack frame is a child of root */
@@ -210,9 +211,8 @@ int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, int sam
 	for (;frame[index] && index < frame_sz;index++) {}
 	--index;
 
-	/* cnt+1 the existed prefix */
+	/* add count for the existed prefix */
 	while (p && index >= 0) {
-
 		if (p->addr == frame[index]) {
 			p->cnt += sample_num;
 			--index;
