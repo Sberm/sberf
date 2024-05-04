@@ -316,12 +316,21 @@ int split_pid(char *str, pid_t *pids) {
 
 int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* off_cpu_time, int *pids, int pid_nr) {
 	/* aggregate stack samples */
-	struct stack_ag* stack_ag_p = stack_aggre_off_cpu(stack_map, off_cpu_time);
+	int pid_nr_tmp = 0;
+	struct stack_ag* stack_ag_p = NULL;
+
+	if (pid_nr == 0)
+		pid_nr_tmp = 1;
+
+	stack_ag_p = stack_aggre_off_cpu(stack_map, off_cpu_time, pids, &pid_nr_tmp);
 
 	if (!stack_ag_p) {
 		printf("No stack data\n");
 		return -1;
 	}
+
+	if (pid_nr_tmp)
+		pid_nr = pid_nr_tmp;
 
 	if(plot_off_cpu(stack_ag_p, env.svg_file_name, pids, pid_nr)) {
 		printf("Failed to plot");
@@ -866,7 +875,7 @@ int record_off_cpu(int argc, char** argv, int index)
 
 	signal(SIGINT, signalHandler);
 
-	for(;!done;){};
+	for(; !done;){}
 
 	skel->bss->enable = false;
 
@@ -888,8 +897,6 @@ int record_off_cpu(int argc, char** argv, int index)
 	} else {
 		record_plot_off_cpu(skel->maps.stacks, skel->maps.off_cpu_time, pids, pid_nr);
 	}
-
-	return 0;
 
 cleanup:
 	off_cpu_bpf__destroy(skel);

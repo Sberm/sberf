@@ -35,4 +35,11 @@
    __typeof__ (b) _b = (b); \
  _a < _b ? _a : _b; })
 
+struct loading_args {
+	char str[64];
+	char dot;
+};
+
+void *print_loading(void *_args);
+
 #endif

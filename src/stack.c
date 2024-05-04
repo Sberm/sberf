@@ -19,6 +19,7 @@
 
 #include <bpf/bpf.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include "stack.h"
 #include "record.skel.h"
 #include "record.h"
@@ -26,6 +27,33 @@
 #include "off_cpu.h"
 
 #define DEBUG false
+#define MAX_PID 128
+
+bool find_pid(int *pids, int pid, int len)
+{
+	int l = 0, h = len - 1, m, pid_tmp;
+
+	if (pids[h] < pid || pids[l] > pid)
+		return false;
+
+	while (l < h) {
+		m = (l + h) / 2;
+		pid_tmp = pids[m];
+		if (pid_tmp == pid) {
+			return true;
+		} else if (pid_tmp < pid) {
+			l = m + 1;
+		} else if (pid_tmp > pid) {
+			h = m - 1;
+		}
+	}
+	return false;
+}
+
+int compar(const void *a, const void *b)
+{
+	return *(int *)a - *(int *)b;
+}
 
 int stack_walk(struct stack_ag* p)
 {
@@ -35,13 +63,13 @@ int stack_walk(struct stack_ag* p)
 	return stack_walk(p->child) + stack_walk(p->next) + p->cnt;
 }
 
-struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample)
+struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int *pid_nr)
 {
 	struct stack_ag *stack_ag_p = NULL, *comm_p = NULL;
 
 	int stack_map_fd = bpf_map__fd(stack_map);
 	int sample_fd = bpf_map__fd(sample);
-	int err;
+	int err, pids_i = 0;
 
 	struct off_cpu_key a = {}, b = {};
 	struct off_cpu_key *last_key = &a;
@@ -67,6 +95,11 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 		if (DEBUG && err) {
 			printf("\n[user stack lost]\n");
 		} else {
+			if (pids_i < MAX_PID && *pid_nr && !find_pid(pids, cur_key->tgid, pids_i)) {
+				pids[pids_i++] = cur_key->tgid;
+				qsort(pids, pids_i, sizeof(int), compar);
+			}
+
 			stack_ag_p->cnt += sample_time;
 			comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
 			stack_insert(comm_p, frame, sample_time, MAX_STACK_DEPTH);
@@ -74,6 +107,8 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 
 		last_key = cur_key;
 	} 
+
+	*pid_nr = pids_i;
 
 	free(frame);
 	return stack_ag_p;

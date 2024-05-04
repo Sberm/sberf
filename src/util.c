@@ -1,5 +1,5 @@
 /*-*- coding:utf-8                                                          -*-│
-│vi: set net ft=c ts=4 sts=4 sw=4 fenc=utf-8                                :vi│
+│vi: set ft=c ts=8 sts=8 sw=8 fenc=utf-8                                    :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
 │ Copyright 2024 Howard Chu                                                    │
 │                                                                              │
@@ -17,10 +17,35 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#ifndef MEM_H
-#define MEM_H
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <string.h>
+#include "util.h"
 
-#define MAX_ENTRIES 204800
-#define MAX_PID 128
+#define DOTS_NR 5
 
-#endif
+void *print_loading(void *_args)
+{
+	struct loading_args *args = _args;
+	char *str = args->str;
+	char dot = args->dot;
+
+	printf("\n");
+
+	while (true) {
+		printf("\33[%dD", strlen(str) + DOTS_NR);
+
+		printf("\33[0K");
+
+		printf("%s", str);
+		fflush(stdout);
+		for (int j = 0; j < DOTS_NR; j++) {
+			/* 400ms */
+			usleep(4 * 100000);
+			printf("%c", dot);
+			fflush(stdout);
+		}
+	}
+}

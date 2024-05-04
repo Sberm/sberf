@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <pthread.h>
 #include "stack.h"
 #include "plot.h"
 #include "util.h"
@@ -162,11 +163,21 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 {
 	struct ksyms* ksym_tb;
 	struct usyms* usym_tb;
+	pthread_t loading;
+	struct loading_args la = {
+		.str = "loading symbols",
+		.dot = '.',
+	};
 
 	if (p == NULL)
 		return -1;
 
 	max_height = stack_get_depth(p) * FRAME_HEIGHT;
+
+	pthread_create(&loading, NULL, print_loading, (void *)&la);
+
+	// printf("\nloading symbols...");
+	// fflush(stdout);
 
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);
@@ -174,6 +185,10 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 	    printf("Failed to load symbols when plotting\n");
 		return -1;
 	}
+
+	pthread_cancel(loading);
+
+	printf("\nloaded.\n");
 	
 	FILE* fp = fopen(file_name, "w");
 
@@ -221,12 +236,16 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 
 	max_height = stack_get_depth(p) * FRAME_HEIGHT;
 
+	printf("\nloading symbols...");
+
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);
 	if (ksym_tb == NULL || usym_tb == NULL) {
 	    printf("Failed to load symbols when plotting\n");
 		return -1;
 	}
+
+	printf("loaded.\n");
 	
 	FILE* fp = fopen(file_name, "w");
 

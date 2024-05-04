@@ -17,7 +17,7 @@ BPFTOOL := bpftool
 CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
 VMLINUX ?= vmlinux/vmlinux.h
-LIBS ?= -l:libbpf.a -lelf -lz 
+LIBS ?= -l:libbpf.a -lelf -lz -lpthread
 UTILS_H := util.h bpf_util.h sym.h
 UTILS := $(addprefix $(SRCDIR)/,$(UTILS_H))
 
@@ -46,7 +46,7 @@ SKEL := $(patsubst %.bpf.c, %.skel.h,$(BPF_FILE))
 SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 
 # 所有.c文件的.o文件写在这里
-OBJS := sberf.o cli.o record.o plot.o stack.o 
+OBJS := sberf.o cli.o record.o plot.o stack.o util.o
 OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
 
 INCLUDE := -Ivmlinux -Isrc -I/usr/include
