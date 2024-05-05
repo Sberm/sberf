@@ -507,7 +507,7 @@ int record_syscall(int argc, char** argv, int index)
 
 	signal(SIGINT, signalHandler);
 
-	for(;!done;){};
+	for (; !done;) {usleep(10 * 1000);}
 
 sym_pb_cleanup:
 	ksym_free(record__ksym_tb);
@@ -611,7 +611,7 @@ int record_tracepoint(int argc, char** argv, int index)
 
 	signal(SIGINT, signalHandler);
 
-	for(;!done;){};
+	for (; !done;) {usleep(10 * 1000);}
 
 	skel->bss->enable = false;
 
@@ -745,7 +745,7 @@ int record_pid(int argc, char** argv, int index)
 	/* consume sigint */
 	signal(SIGINT, signalHandler);
 
-	for (;!done;){}
+	for (; !done;) {usleep(10 * 1000);}
 
 	if (env.no_plot) {
 		ksym_tb = ksym_load();
@@ -875,7 +875,7 @@ int record_off_cpu(int argc, char** argv, int index)
 
 	signal(SIGINT, signalHandler);
 
-	for(; !done;){}
+	for (; !done;) {usleep(10 * 1000);}
 
 	skel->bss->enable = false;
 
@@ -967,7 +967,7 @@ int record_hardware(int argc, char** argv, int index)
 
 	signal(SIGINT, signalHandler);
 
-	for (; !done;) {}
+	for (; !done;) {usleep(10 * 1000);}
 
 	printf("\n\n");
 	printf("  %-20s %-64s\n\n", "hardware-event", "count");
