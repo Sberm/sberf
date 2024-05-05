@@ -24,10 +24,13 @@
 SEC("tp")                                                     \
 int tp_trgr_##index(void* ctx)                                \
 {                                                             \
-	u64 *cnt, pid_tgid = bpf_get_current_pid_tgid();      \
+	if (!enable)                                          \
+		return 0;                                     \
+	__u64 *cnt, pid_tgid = bpf_get_current_pid_tgid();    \
+	__u64 zero = 0;                                       \
 	pid_t pid = pid_tgid >> 32;                           \
-	u32 zero = 0, key = (index);                          \
-	if (filter_pid(pid) && !enable)                       \
+	__u32 key = (index);                                  \
+	if (spec_pid && filter_pid(pid))                      \
 		return 0;                                     \
 	cnt = bpf_map_lookup_insert(&event_cnt, &key, &zero); \
 	if (cnt)                                              \

@@ -429,19 +429,22 @@ void syscall_handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 
 int record_syscall(int argc, char** argv, int index)
 {
-	return 0;
-	/*
 	struct event_bpf *skel;
-	int err = 0, event_num, fd, one = 1;
 	struct perf_buffer *pb = NULL;
 	struct perf_buffer_opts pb_opts = {};
 	size_t pid_nr;
+	struct bpf_link *link = NULL;
+	char event_full[64];
 	pid_t pids[MAX_PID];
+	struct tp_name tp_names[MAX_TP_TRGR_PROG];
+	int err = 0, event_num, fd, one = 1, tp_i = 0;
+	unsigned long long cnt = 0;
+	char tmp[64];
 
 	parse_opts_env(argc, argv, index, event_env, ARRAY_LEN(event_env));
 
 	pid_nr = split_pid(env.pids, pids);
-	if (!pid_nr) {
+	if (!env.all_p && !pid_nr) {
 		__record_print_help();
 		return 0;
 	}
@@ -449,9 +452,9 @@ int record_syscall(int argc, char** argv, int index)
 	event_num = split_event_str();
 
 	if (event_num > 1)
-		printf("recording events: ");
+		printf("recording syscalls: ");
 	else
-		printf("recording event: ");
+		printf("recording syscall: ");
 
 	for (int i = 0;i < event_num; i++)
 		printf("%s ", event_names[i]);
@@ -469,13 +472,26 @@ int record_syscall(int argc, char** argv, int index)
 		goto cleanup;
 	}
 
-	fd = bpf_map__fd(skel->maps.task_filter);
+	struct bpf_program *tp_trigger_prog[MAX_TP_TRGR_PROG] = {
+		TP_TRGR_PROG(0),
+		TP_TRGR_PROG(1),
+		TP_TRGR_PROG(2),
+		TP_TRGR_PROG(3),
+		TP_TRGR_PROG(4),
+		TP_TRGR_PROG(5),
+		TP_TRGR_PROG(6),
+		TP_TRGR_PROG(7),
+		TP_TRGR_PROG(8),
+		TP_TRGR_PROG(9),
+	};
 
+	skel->bss->spec_pid = !env.all_p;
+
+	fd = bpf_map__fd(skel->maps.task_filter);
 	for (int i = 0;i < pid_nr;i++)
 		bpf_map_update_elem(fd, &pids[i], &one, BPF_ANY);
 
-	record__ksym_tb = ksym_load();
-	record__usym_tb = usym_load(pids, pid_nr);
+	close(fd);
 
 	err = event_bpf__attach(skel);
 	if (err) {
@@ -483,42 +499,50 @@ int record_syscall(int argc, char** argv, int index)
 		goto cleanup;
 	}
 
-	pb = perf_buffer__new(bpf_map__fd(skel->maps.pb), 8, syscall_handle_event, NULL, NULL, NULL);
-	if (pb == NULL)
-		goto sym_pb_cleanup;
+	for (int i = 0; i < event_num && i < MAX_TP_TRGR_PROG; i++) {
+		sprintf(event_full, "sys_enter_%s", event_names[i]);
 
-	struct bpf_link *link = NULL;
-	for (int i = 0;i < event_num;i++) {
-		link = bpf_program__attach_ksyscall(skel->progs.syscall_trgr, event_names[i], NULL);
+		strcpy(tp_names[tp_i].name, event_names[i]);
+
+		link = bpf_program__attach_tracepoint(tp_trigger_prog[tp_i], "syscalls", event_full);
+		++tp_i;
 		if (link == NULL) {
 			printf("Failed to attach syscall %s\n", event_names[i]);
 		}
 	}
 
-	while (true) {
-		err = perf_buffer__poll(pb, 200);
-		if (err == -EINTR) {
-			err = 0;
-			break;
-		}
-		if (err < 0)
-			goto cleanup;
-	}
+	skel->bss->enable = true;
 
 	signal(SIGINT, signalHandler);
 
 	for (; !done;) {usleep(10 * 1000);}
 
-sym_pb_cleanup:
-	ksym_free(record__ksym_tb);
-	usym_free(record__usym_tb);
-	perf_buffer__free(pb);
+	skel->bss->enable = false;
+
+	printf("\n");
+	printf("    %-32s    %s\n\n", "syscall", "count");
+
+	fd = bpf_map__fd(skel->maps.event_cnt);
+	if (fd < 0) {
+		printf("Failed to find fd of event counting map\n");
+		goto cleanup;
+	}
+
+	for (unsigned int i = 0; i < tp_i && i < MAX_TP_TRGR_PROG; i++) {
+		err = bpf_map_lookup_elem(fd, &i, &cnt);
+		if (err)
+			cnt = 0;
+
+		sprintf(tmp, "%s", tp_names[i].name);
+		printf("    %-32s    %u\n", tmp, cnt);
+	}
+
+	printf("\n");
 
 cleanup:
 	close(fd);
 	event_bpf__destroy(skel);
 	return err;
-	*/
 }
 
 int record_tracepoint(int argc, char** argv, int index)
@@ -527,7 +551,7 @@ int record_tracepoint(int argc, char** argv, int index)
 	struct bpf_link *link = NULL;
 	struct bpf_tracepoint_opts tp_opts = {.sz = sizeof(struct bpf_tracepoint_opts)};
 	struct tp_name tp_names[MAX_TP_TRGR_PROG];
-	int err = 0, event_num = 0, fd, one = 1;
+	int err = 0, event_num = 0, fd, one = 1, tp_i = 0;
 	unsigned long long cnt = 0;
 	pid_t pids[MAX_PID];
 	size_t pid_nr;
@@ -573,16 +597,13 @@ int record_tracepoint(int argc, char** argv, int index)
 		TP_TRGR_PROG(9),
 	};
 
-	if (env.all_p)
-		skel->bss->spec_pid = false;
-	else
-		skel->bss->spec_pid = true;
+	skel->bss->spec_pid = !env.all_p;
 
-	/* task filter */
 	fd = bpf_map__fd(skel->maps.task_filter);
-
 	for (int i = 0;i < pid_nr;i++)
 		bpf_map_update_elem(fd, &pids[i], &one, BPF_ANY);
+
+	close(fd);
 
 	for (int i = 0; i < event_num && i < MAX_TP_TRGR_PROG; i++) {
 		/* syscalls:sys_enter_open */
@@ -590,12 +611,22 @@ int record_tracepoint(int argc, char** argv, int index)
 		size_t index = 0;
 
 		/* event_names[i] now is the category(syscalls), tracepoint is sys_enter_open */
-		strtok(event_names[i], ":"); tracepoint = strtok(NULL, ":");
+		strtok(event_names[i], ":");
+		tracepoint = strtok(NULL, ":");
 
-		strcpy(tp_names[i].category, event_names[i]);
-		strcpy(tp_names[i].name, tracepoint);
+		if (tracepoint == NULL) {
+			printf("Illegal event name %s\n", event_names[i]);
+			if (event_num == 1)
+				goto cleanup;
+			else
+				continue;
+		}
 
-		link = bpf_program__attach_tracepoint(tp_trigger_prog[i], event_names[i], tracepoint);
+		strcpy(tp_names[tp_i].category, event_names[i]);
+		strcpy(tp_names[tp_i].name, tracepoint);
+
+		link = bpf_program__attach_tracepoint(tp_trigger_prog[tp_i], event_names[i], tracepoint);
+		++tp_i;
 		if (link == NULL) {
 			printf("Failed to attach tracepoint %s:%s\n", event_names[i], tracepoint);
 		}
@@ -624,7 +655,7 @@ int record_tracepoint(int argc, char** argv, int index)
 		goto cleanup;
 	}
 
-	for (unsigned int i = 0; i < event_num && i < MAX_TP_TRGR_PROG; i++) {
+	for (unsigned int i = 0; i < tp_i && i < MAX_TP_TRGR_PROG; i++) {
 		err = bpf_map_lookup_elem(fd, &i, &cnt);
 		if (err)
 			cnt = 0;
@@ -677,9 +708,10 @@ int record_pid(int argc, char** argv, int index)
 
 	/* update task_filter */
 	fd = bpf_map__fd(skel->maps.task_filter);
-
 	for (int i = 0;i < pid_nr;i++)
 		bpf_map_update_elem(fd, &pids[i], &one, BPF_ANY);
+
+	close(fd);
 
 	freq = env.freq;
 	sample_freq = env.sample_freq; 
@@ -844,17 +876,12 @@ int record_off_cpu(int argc, char** argv, int index)
 		goto cleanup;
 	}
 	
-	if (env.all_p)
-		skel->bss->spec_pid = false;
-	else
-		skel->bss->spec_pid = true;
+	skel->bss->spec_pid = !env.all_p;
 
-	/* temp */
 	if (pid_nr == 0)
 		skel->bss->spec_pid = false;
 
 	fd = bpf_map__fd(skel->maps.task_filter);
-
 	for (int i = 0;i < pid_nr;i++)
 		bpf_map_update_elem(fd, &pids[i], &one, BPF_ANY);
 
@@ -955,8 +982,10 @@ int record_hardware(int argc, char** argv, int index)
 			attr.config = default_tmp[i];
 			for (int j = 0; j < cpu_nr; j++) {
 				fds[k] = syscall(__NR_perf_event_open, &attr, j, -1, -1, 0);
-				if (fds[k] < 0)
+				if (fds[k] < 0) {
+					printf("This machine doesn't support hardware events\n");
 					goto cleanup;
+				}
 				
 				ioctl(fds[k], PERF_EVENT_IOC_RESET, 0);
 				ioctl(fds[k], PERF_EVENT_IOC_ENABLE, 0);
