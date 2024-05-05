@@ -98,9 +98,6 @@ static struct func_struct record_func[] = {
 	{"--hardware", record_hardware},
 };
 
-// TODO: refactor, delete the duplicates
-// TODO: change them to enums
-
 #define COMMON_ENV                   \
 	{"-f", INT, &env.sample_freq},   \
 	{"-np", MGL, &env.no_plot},      \
@@ -229,7 +226,7 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kern_stack_id, frame);
 		/* kernel stack not available */
 		if (cur_key->kern_stack_id != -EFAULT) {
-			if (err)
+			if (env.debug && err)
 				printf("\n[kernel stack lost]\n");
 			else
 				print_stack_frame(frame, sample_num, 'k', ksym_tb);
@@ -346,12 +343,21 @@ int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* off_cpu_time,
 
 int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, int pid_nr) {
 	/* aggregate stack samples */
-	struct stack_ag* stack_ag_p = stack_aggre(stack_map, sample);
+	int pid_nr_tmp = 0;
+	struct stack_ag* stack_ag_p = NULL;
+
+	if (pid_nr == 0)
+		pid_nr_tmp = 1;
+
+	stack_ag_p = stack_aggre(stack_map, sample, pids, &pid_nr_tmp);
 
 	if (!stack_ag_p) {
 		printf("No stack data\n");
 		return -1;
 	}
+
+	if (pid_nr_tmp)
+		pid_nr = pid_nr_tmp;
 
 	/* plot the aggregated stack */
 	if(plot(stack_ag_p, env.svg_file_name, pids, pid_nr)) {
@@ -676,6 +682,7 @@ int record_pid(int argc, char** argv, int index)
 {
 	struct record_bpf *skel;
 	int err = 0, one = 1, fd;
+	int cpu_nr = sysconf(_SC_NPROCESSORS_ONLN);
 	struct bpf_link* link;
 	size_t pid_nr;
 	unsigned long long freq, sample_freq;
@@ -719,7 +726,6 @@ int record_pid(int argc, char** argv, int index)
 	attr.freq = freq;
 	attr.sample_freq = sample_freq;
 
-	// TODO: change value
 	bpf_map__set_max_entries(skel->maps.stack_map, MAX_ENTRIES);
 
 	err = record_bpf__load(skel);
@@ -730,9 +736,7 @@ int record_pid(int argc, char** argv, int index)
 
 	/* record all process */
 	if (env.all_p){ 
-		// TODO: all cpu
-		int cpu_cnt = 1;
-		for (int i = 0;i < cpu_cnt;i++) {
+		for (int i = 0;i < cpu_nr;i++) {
 			fd = syscall(__NR_perf_event_open, &attr, -1, i, -1, PERF_FLAG_FD_CLOEXEC);
 			if (fd < 0) {
 				printf("Failed to open perf event for all process\n");
@@ -940,7 +944,8 @@ int record_hardware(int argc, char** argv, int index)
 	struct event_bpf *skel;
 	struct bpf_link* link;
 	struct perf_event_attr attr;
-	int fds[MAX_HARDWARE], event_num, flag, err = 0, k = 0, cpu_nr = 1;
+	int fds[MAX_HARDWARE], event_num, flag, err = 0, k = 0;
+	int cpu_nr = sysconf(_SC_NPROCESSORS_ONLN);
 	bool default_hw = false;
 	__u64 cnt[MAX_HARDWARE] = {0};
 	int default_tmp[] = {PERF_COUNT_HW_CPU_CYCLES,
@@ -951,6 +956,7 @@ int record_hardware(int argc, char** argv, int index)
 	memset(&attr, 0, sizeof(attr));
 	attr.type = PERF_TYPE_HARDWARE;
 	attr.disabled = 1;
+
 
 	parse_opts_env(argc, argv, index, hardware_env, ARRAY_LEN(hardware_env));
 

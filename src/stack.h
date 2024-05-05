@@ -36,7 +36,7 @@ struct stack_ag {
 
 int stack_walk(struct stack_ag* p);
 struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int *pid_nr);
-struct stack_ag *stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample);
+struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int *pid_nr);
 int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, unsigned long long sample_num, int frame_sz);
 void stack_free(struct stack_ag* stack_ag_p);
 int stack_get_least_sample(struct stack_ag* p);

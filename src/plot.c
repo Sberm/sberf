@@ -130,6 +130,7 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, 
 					       frame_title, width / MAX_WIDTH * 100, x, y, width, height,
 					       c, x + 0.2, y + FRAME_HEIGHT - 4);
 		break;
+
 	case PLOT_OFF_CPU:
 		snprintf(g_str, sizeof(g_str), " <g>\n"
 					       " <title>%s (%.3fs)</title><rect x=\"%.2f\" y=\"%.2f\""
@@ -140,6 +141,7 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, 
 					       frame_title, ((double)p->cnt / 1000000000ULL), x, y, width, height,
 					       c, x + 0.2, y + FRAME_HEIGHT - 4);
 		break;
+
 	default:
 		break;
 	}
@@ -230,13 +232,20 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 {
 	struct ksyms* ksym_tb;
 	struct usyms* usym_tb;
+	pthread_t loading;
+	struct loading_args la = {
+		.str = "loading symbols",
+		.dot = '.',
+	};
 
 	if (p == NULL)
 		return -1;
 
 	max_height = stack_get_depth(p) * FRAME_HEIGHT;
 
-	printf("\nloading symbols...");
+	pthread_create(&loading, NULL, print_loading, (void *)&la);
+
+	// printf("\nloading symbols...");
 
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);
@@ -245,7 +254,9 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 		return -1;
 	}
 
-	printf("loaded.\n");
+	pthread_cancel(loading);
+
+	printf("\nloaded.\n");
 	
 	FILE* fp = fopen(file_name, "w");
 

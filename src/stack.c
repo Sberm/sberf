@@ -114,13 +114,13 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 	return stack_ag_p;
 }
 
-struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
+struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int *pid_nr)
 {
 	struct stack_ag *stack_ag_p = NULL, *comm_p = NULL;
 
 	int stack_map_fd = bpf_map__fd(stack_map);
 	int sample_fd = bpf_map__fd(sample);
-	int err;
+	int err, pids_i = 0;
 
 	struct key_t a = {}, b = {};
 	struct key_t *last_key = &a;
@@ -153,7 +153,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kern_stack_id, frame);
 		/* kernel stack not available */
 		if (cur_key->kern_stack_id != -EFAULT) {
-			if (err)
+			if (DEBUG && err)
 				printf("\n[kernel stack lost]\n");
 			else {
 				stack_ag_p->cnt += sample_num;
@@ -166,6 +166,11 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 		if (DEBUG && err)
 			printf("\n[user stack lost]\n");
 		else {
+			if (pids_i < MAX_PID && *pid_nr && !find_pid(pids, cur_key->pid, pids_i)) {
+				pids[pids_i++] = cur_key->pid;
+				qsort(pids, pids_i, sizeof(int), compar);
+			}
+
 			stack_ag_p->cnt += sample_num;
 			comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
 			stack_insert(comm_p, frame, sample_num, MAX_STACK_DEPTH);
@@ -173,6 +178,8 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample)
 
 		last_key = cur_key;
 	} 
+
+	*pid_nr = pids_i;
 
 	free(frame);
 	return stack_ag_p;
