@@ -47,13 +47,21 @@ SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 
 # 所有.c文件的.o文件写在这里
 OBJS := sberf.o cli.o record.o plot.o stack.o util.o
-OBJS_BUILT := $(addprefix $(OUTPUT)/,$(OBJS))
+OBJS_FULL := $(addprefix $(OUTPUT)/,$(OBJS))
 
 INCLUDE := -Ivmlinux -Isrc -I/usr/include
+
+# all: $(SBERF)
+
+# .o --GCC--> executable
+sberf: $(OBJS_FULL)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) $(OBJS_FULL) $(INCLUDE) $(LIBS) -o $@ 
 
 # bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
 # llvm-strip去除tmp.bpf.o中的DWARF信息
 # bpftool生成bpf.o
+.PRECIOUS: $(SKEL_DIR)/%.bpf.o # don't delete .bpf.o 
 $(SKEL_DIR)/%.bpf.o: $(BPF_DIR)/%.bpf.c $(SRCDIR)/$(wildcard %.h) $(VMLINUX) $(UTILS) | $(SKEL_DIR)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
@@ -63,22 +71,45 @@ $(SKEL_DIR)/%.bpf.o: $(BPF_DIR)/%.bpf.c $(SRCDIR)/$(wildcard %.h) $(VMLINUX) $(U
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # bpf.o --BPFTOOL--> .skel.h
-.PRECIOUS: $(SKEL_DIR)/%.skel.h # 编译完了不删掉skel.h
+.PRECIOUS: $(SKEL_DIR)/%.skel.h # don't delete skel.h
 $(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 	$(call msg,SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
 # .c --GCC--> .o
-$(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(SRCDIR)/$(wildcard %.h) $(UTILS) | $(OUTPUT)
+# $(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(SRCDIR)/$(wildcard %.h) $(UTILS) | $(OUTPUT)
+# 	$(call msg,CC,$@)
+# 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
+
+$(OUTPUT)/sberf.o: $(SRCDIR)/sberf.c $(SRCDIR)/util.h | $(OUTPUT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
 
-# .o --GCC--> executable
-sberf: $(OBJS_BUILT)
+$(OUTPUT)/cli.o: $(SRCDIR)/cli.c $(SRCDIR)/cli.h $(SRCDIR)/sub_commands.h | $(OUTPUT)
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(OBJS_BUILT) $(INCLUDE) $(LIBS) -o $@ 
+	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
 
-all: $(SBERF)
+$(OUTPUT)/record.o: $(SRCDIR)/record.c $(SRCDIR)/record.h $(SKEL_DIR)/record.skel.h \
+		    $(SKEL_DIR)/mem.skel.h $(SKEL_DIR)/event.skel.h $(SKEL_DIR)/off_cpu.skel.h \
+		    $(SRCDIR)/cli.h $(SRCDIR)/sub_commands.h \
+		    $(SRCDIR)/stack.h $(SRCDIR)/plot.h $(SRCDIR)/event.h $(SRCDIR)/off_cpu.h \
+		    $(UTILS) | $(OUTPUT)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
+
+$(OUTPUT)/plot.o: $(SRCDIR)/plot.c $(SRCDIR)/plot.h $(SRCDIR)/util.h $(SRCDIR)/sym.h | $(OUTPUT)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
+
+$(OUTPUT)/stack.o: $(SRCDIR)/stack.c $(SRCDIR)/stack.h $(SKEL_DIR)/record.skel.h \
+		   $(SRCDIR)/record.h $(SRCDIR)/record.h $(SRCDIR)/util.h \
+		   $(SRCDIR)/off_cpu.h | $(OUTPUT)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
+
+$(OUTPUT)/util.o: $(SRCDIR)/util.c $(SRCDIR)/util.h | $(OUTPUT)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
 
 # all obj file will be stored in build directory
 $(OUTPUT):

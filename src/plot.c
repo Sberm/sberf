@@ -54,28 +54,31 @@ static const char css[] = "<style type=\"text/css\">\n"
 			  "</style>\n";
 
 static const char js[] = "<script><![CDATA[\n"
-" function main(evt) {\n"
-"     let g = document.querySelectorAll('g');\n"
-"     g.forEach((gi) => {\n"
-"         let rect = gi.querySelector('rect');\n"
-"         let title = gi.querySelector('title');\n"
-"         let content = title.textContent;\n"
-"         let text = gi.querySelector('text');\n"
-"         text.textContent = content;\n"
-"         let width = rect.width.baseVal.value;\n"
-"         console.log(text.getSubStringLength(0, content.length), width);\n"
-"         if (text.getSubStringLength(0, content.length) <= width) {\n"
-"             return;\n"
-"         }\n"
-"         for (let i = content.length - 1; i >= 0; --i) {\n"
-"             if (text.getSubStringLength(0, i + 1) <= width) {\n"
-"                 text.textContent = content.substring(0, i) + '..';\n"
-"                 return;\n"
-"             }\n"
-"         }\n"
-"         text.innerHTML = \"\";\n"
-"     });\n"
-" }\n"
+"function main(evt) {\n"
+"	let g = document.querySelectorAll('g');\n"
+"	g.forEach((gi) => {\n"
+"		let rect = gi.querySelector('rect');\n"
+"		let title = gi.querySelector('title');\n"
+"		let content = title.textContent;\n"
+"		let text = gi.querySelector('text');\n"
+"		text.textContent = content;\n"
+"		let width = rect.width.baseVal.value;\n"
+"		if (text.getSubStringLength(0, content.length) <= width) {\n"
+"			return;\n"
+"		}\n"
+"		if (width < 11.5) {\n"
+"			text.textContent = '';\n"
+"			return;\n"
+"		}\n"
+"		for (let i = 0; i < content.length; i += 2) {\n"
+"			if (text.getSubStringLength(0, i + 2) > width) {\n"
+"				text.textContent = content.substring(0, i);\n"
+"				return;\n"
+"			}\n"
+"		}\n"
+"		text.innerHTML = \"\";\n"
+"	});\n"
+"}\n"
 "]]></script>\n";
 
 int color_index = 0;
@@ -121,23 +124,23 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, 
 
 	switch (plot_mode) {
 	case PLOT_CYCLE:
-		snprintf(g_str, sizeof(g_str), " <g>\n"
-					       " <title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\""
+		snprintf(g_str, sizeof(g_str), "<g>\n"
+					       "<title>%s (%%%.2f)</title><rect x=\"%.2f\" y=\"%.2f\""
 					       " width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\""
-					       " rx=\"2\" ry=\"2\" />\n"
-					       " <text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
-					       " </g>\n",
+					       " rx=\"1\" ry=\"1\" />\n"
+					       "<text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
+					       "</g>\n",
 					       frame_title, width / MAX_WIDTH * 100, x, y, width, height,
 					       c, x + 0.2, y + FRAME_HEIGHT - 4);
 		break;
 
 	case PLOT_OFF_CPU:
-		snprintf(g_str, sizeof(g_str), " <g>\n"
-					       " <title>%s (%.3fs)</title><rect x=\"%.2f\" y=\"%.2f\""
+		snprintf(g_str, sizeof(g_str), "<g>\n"
+					       "<title>%s (%.3fs)</title><rect x=\"%.2f\" y=\"%.2f\""
 					       " width=\"%.2f\" height=\"%.2f\" fill=\"#%06x\""
-					       " rx=\"2\" ry=\"2\" />\n"
-					       " <text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
-					       " </g>\n",
+					       " rx=\"1\" ry=\"1\" />\n"
+					       "<text  x=\"%.2f\" y=\"%.2f\" ></text>\n"
+					       "</g>\n",
 					       frame_title, ((double)p->cnt / 1000000000ULL), x, y, width, height,
 					       c, x + 0.2, y + FRAME_HEIGHT - 4);
 		break;

@@ -23,6 +23,8 @@
 #include "util.h"
 
 #define MAX_RAW_SYSCALL_ARGS 6
+#define MAX_ENTRIES 204800
+#define MAX_STACKS 32
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
@@ -33,7 +35,9 @@ struct arg {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
+	__uint(value_size, MAX_STACKS * sizeof(u64));
 	__type(key, u32);
+	__uint(max_entries, MAX_ENTRIES);
 } stack_map SEC(".maps");
 
 struct {

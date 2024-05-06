@@ -35,7 +35,7 @@ struct func_struct {
 };
 
 struct env_struct {
-	char opt[4];
+	char opt[16];
 	enum ENV_MODE type;
 	void *p;
 };

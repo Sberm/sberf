@@ -65,12 +65,12 @@ int profile(struct bpf_perf_event_data *ctx)
 
 	struct key_t key = {};
 
+	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
+	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
 	key.pid = pid;
 	bpf_get_current_comm(&key.comm, sizeof(key.comm));
-	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
-	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK);
 
-	u64* key_samp;
+	u64 *key_samp;
 	key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
 
 	if (key_samp)

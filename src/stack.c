@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include "stack.h"
 #include "record.skel.h"
-#include "record.h"
+#include "record.h" // for key_t
 #include "util.h"
 #include "off_cpu.h"
 
@@ -77,6 +77,7 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 
 	unsigned long long *frame = calloc(MAX_STACK_DEPTH, sizeof(unsigned long long));
 	unsigned long long sample_time = 0;
+	unsigned long long cnt = 0;
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
 		if (stack_ag_p == NULL) {
@@ -103,12 +104,15 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 			stack_ag_p->cnt += sample_time;
 			comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
 			stack_insert(comm_p, frame, sample_time, MAX_STACK_DEPTH);
+			++cnt;
 		}
 
 		last_key = cur_key;
 	} 
 
 	*pid_nr = pids_i;
+
+	printf("\nCollected %llu samples\n", cnt);
 
 	free(frame);
 	return stack_ag_p;
@@ -128,7 +132,8 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 
 	unsigned long long *frame = calloc(MAX_STACK_DEPTH, 
 					   sizeof(unsigned long long)), 
-		      		    sample_num = 0;
+		      		    sample_num = 0,
+				    cnt = 0;
 
 	/*
 	 * root
@@ -159,6 +164,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 				stack_ag_p->cnt += sample_num;
 				comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
 				stack_insert(comm_p, frame, sample_num, MAX_STACK_DEPTH);
+				++cnt;
 			}
 		}
 
@@ -174,12 +180,15 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 			stack_ag_p->cnt += sample_num;
 			comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
 			stack_insert(comm_p, frame, sample_num, MAX_STACK_DEPTH);
+			++cnt;
 		}
 
 		last_key = cur_key;
 	} 
 
 	*pid_nr = pids_i;
+
+	printf("\nCollected %llu samples\n", cnt);
 
 	free(frame);
 	return stack_ag_p;
