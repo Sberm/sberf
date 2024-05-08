@@ -25,3 +25,4 @@ nohup.out
 *.svg
 *.txt
 *.data
+perf.data.*
