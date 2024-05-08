@@ -978,13 +978,20 @@ int record_numa(int argc, char **argv, int index)
 
 int record_hardware(int argc, char **argv, int index)
 {
+	/*
+	 * For pid-specific hardware events,
+	 * sberf now can only specify one
+	 * pid at a time.
+	 */
 	struct event_bpf *skel;
 	struct bpf_link* link;
 	struct perf_event_attr attr;
-	int fds[MAX_HARDWARE], event_num, flag, err = 0, k = 0;
+	int **fds, fd, event_num, flag, err = 0, k = 0;
+	size_t pid_nr;
+	pid_t pids[MAX_PID];
 	int cpu_nr = sysconf(_SC_NPROCESSORS_ONLN);
 	bool default_hw = false;
-	__u64 cnt[MAX_HARDWARE] = {0};
+	__u64 cnt_tmp, cnt;
 	int default_tmp[] = {PERF_COUNT_HW_CPU_CYCLES,
 			     PERF_COUNT_HW_INSTRUCTIONS,
 			     PERF_COUNT_HW_BRANCH_INSTRUCTIONS,
@@ -996,25 +1003,34 @@ int record_hardware(int argc, char **argv, int index)
 
 	parse_opts_env(argc, argv, index, hardware_env, ARRAY_LEN(hardware_env));
 
+	pid_nr = split_pid(env.pids, pids);
+
 	event_num = split_event_str();
 
-	if (event_num == 0)
+	if (event_num == 0) {
 		default_hw = true;
+		event_num = 4;
+	}
+		
+	fds = malloc(sizeof(int *) * event_num);
+	for (int i = 0; i < event_num; i++)
+		fds[i] = malloc(sizeof(int) * cpu_nr);
 
 	for (int i = 0; i < MAX_HARDWARE && i < event_num; i++) {
 		flag = parse_hardware_flag(event_names[i]);
 		if (flag != -1) {
 			attr.config = flag;
 			for (int j = 0; j < cpu_nr; j++) {
-				fds[k] = syscall(__NR_perf_event_open, &attr, j, -1, -1, 0);
-				if (fds[k] < 0) {
+				if (pid_nr == 0)
+					fd = syscall(__NR_perf_event_open, &attr, -1, j, -1, 0);
+				else
+					fd = syscall(__NR_perf_event_open, &attr, pids[0], j, -1, 0);
+				if (fd < 0) {
 					printf("Failed to open perf event for %s\n", event_names[i]);
 					goto cleanup;
 				}
 				
-				ioctl(fds[k], PERF_EVENT_IOC_RESET, 0);
-				ioctl(fds[k], PERF_EVENT_IOC_ENABLE, 0);
-				++k;
+				fds[i][j] = fd;
 			}
 		}
 	}
@@ -1023,16 +1039,24 @@ int record_hardware(int argc, char **argv, int index)
 		for (int i = 0; i < ARRAY_LEN(default_tmp); i++) {
 			attr.config = default_tmp[i];
 			for (int j = 0; j < cpu_nr; j++) {
-				fds[k] = syscall(__NR_perf_event_open, &attr, j, -1, -1, 0);
-				if (fds[k] < 0) {
-					printf("This machine doesn't support hardware events\n");
+				if (pid_nr == 0)
+					fd = syscall(__NR_perf_event_open, &attr, -1, j, -1, 0);
+				else
+					fd = syscall(__NR_perf_event_open, &attr, pids[0], j, -1, 0);
+				if (fd < 0) {
+					printf("This machine probably doesn't support hardware events\n");
 					goto cleanup;
 				}
 				
-				ioctl(fds[k], PERF_EVENT_IOC_RESET, 0);
-				ioctl(fds[k], PERF_EVENT_IOC_ENABLE, 0);
-				++k;
+				fds[i][j] = fd;
 			}
+		}
+	}
+
+	for (int i = 0; i < event_num; i++) {
+		for (int j = 0; j < cpu_nr; j++) {
+			ioctl(fds[i][j], PERF_EVENT_IOC_RESET, 0);
+			ioctl(fds[i][j], PERF_EVENT_IOC_ENABLE, 0);
 		}
 	}
 
@@ -1043,30 +1067,47 @@ int record_hardware(int argc, char **argv, int index)
 	printf("\n\n");
 	printf("  %-20s %-64s\n\n", "hardware-event", "count");
 
-	for (int i = 0; !default_hw && i < k; i++) {
-		ioctl(fds[i], PERF_EVENT_IOC_DISABLE, 0);
-		read(fds[i], &cnt[i], sizeof(cnt[0]));
-		
-		printf("  %-20s %-64llu\n", event_names[i], cnt[i]);
-	}
-
 	if (default_hw) {
-		for (int i = 0; i < ARRAY_LEN(default_tmp); i++) {
-			ioctl(fds[i], PERF_EVENT_IOC_DISABLE, 0);
-			read(fds[i], &cnt[i], sizeof(cnt[0]));
+		__u64 cnt_arr[ARRAY_LEN(default_tmp)];
+
+		for (int i = 0; i < event_num; i++) {
+			cnt = 0;
+			for (int j = 0; j < cpu_nr; j++) {
+				ioctl(fds[i][j], PERF_EVENT_IOC_DISABLE, 0);
+				read(fds[i][j], &cnt_tmp, sizeof(cnt_tmp));
+				cnt += cnt_tmp;
+			}
+			cnt_arr[i] = cnt;
 		}
 
-		printf("  %-20s %-64llu\n", "cycles", cnt[0]);
-		printf("  %-20s %-64llu\n", "instructions", cnt[1]);
-		printf("  %-20s %-64llu\n", "branches", cnt[2]);
-		printf("  %-20s %-64llu\n", "branch-misses(%%%.3f)", cnt[3], (double)cnt[3]/(double)cnt[2]);
+		char br_ms[64];
+		sprintf(br_ms, "%llu (%%%.6f)", cnt_arr[3], (double)cnt_arr[3]/(double)cnt_arr[2]);
+
+		printf("  %-20s %-64llu\n", "cycles", cnt_arr[0]);
+		printf("  %-20s %-64llu\n", "instructions", cnt_arr[1]);
+		printf("  %-20s %-64llu\n", "branches", cnt_arr[2]);
+		printf("  %-20s %-64s\n", "branch-misses", br_ms);
+	} else {
+		for (int i = 0; i < event_num; i++) {
+			cnt = 0;
+			for (int j = 0; j < cpu_nr; j++) {
+				ioctl(fds[i][j], PERF_EVENT_IOC_DISABLE, 0);
+				read(fds[i][j], &cnt_tmp, sizeof(cnt_tmp));
+				cnt += cnt_tmp;
+			}
+			printf("  %-20s %-64llu\n", event_names[i], cnt);
+		}
 	}
 
 	printf("\n");
 
 cleanup:
-	for (int i = 0; i < k; i++)
-		close(fds[i]);
+	for (int i = 0; i < event_num; i++) {
+		for (int j = 0; j < cpu_nr; j++)
+			close(fds[i][j]);
+		free(fds[i]);
+	}
+	free(fds);
 
 	return err;
 }
