@@ -1,5 +1,5 @@
 /*-*- coding:utf-8                                                          -*-│
-│vi: set net ft=c ts=4 sts=4 sw=4 fenc=utf-8                                :vi│
+│vi: set ft=c ts=8 sts=8 sw=8 fenc=utf-8                                    :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
 │ Copyright 2024 Howard Chu                                                    │
 │                                                                              │
@@ -17,31 +17,40 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-/*
- * Based on profile from BCC by Brendan Gregg and others.
- */
-
 #include "vmlinux.h"
-#include <stdbool.h>
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_core_read.h>
-#include <bpf/bpf_tracing.h>
-
-#include "record.h"
+#include "event.h"
 #include "bpf_util.h"
 #include "util.h"
 
+#define MAX_ENTRIES 204800
+#define MAX_STACKS 32
+#define MAX_EVENTS 10
+#define MAX_HW 10
+#define TASK_COMM_LEN 16
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-// specific pid
-volatile bool spec_pid = false;
+volatile bool enable;
+volatile bool spec_pid;
+volatile bool collect_stack;
 
-// init value for insertion into map
-static const u64 zero;
+struct key_t {
+	__u32 pid;
+	int user_stack_id;
+	int kern_stack_id;
+	char comm[TASK_COMM_LEN];
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, __u32);
+	__type(value, __u64);
+	__uint(max_entries, MAX_EVENTS);
+} event_cnt SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
-	__uint(value_size, MAX_STACK_DEPTH * sizeof(u64));
+	__uint(value_size, MAX_STACKS * sizeof(u64));
 	__type(key, u32);
 	__uint(max_entries, MAX_ENTRIES);
 } stack_map SEC(".maps");
@@ -49,35 +58,47 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, struct key_t);
-    __type(value, u64);
+    __type(value, __u64);
     __uint(max_entries, MAX_ENTRIES);
 } sample SEC(".maps");
 
-SEC("perf_event")
-int profile(struct bpf_perf_event_data *ctx)
+SEC("uprobe")
+int uprobe_trgr(void *ctx)
 {
-	u64 id = bpf_get_current_pid_tgid();
-	u32 pid = id >> 32;
-
-	// if to trace only specific pids
-	if (spec_pid && filter_pid(pid))
+	if (!enable)
 		return 0;
 
-	struct key_t key = {};
+	__u64 *cnt, tgid_pid = bpf_get_current_pid_tgid();
+	__u64 zero = 0;
+	pid_t tgid = tgid_pid >> 32;
+	__u32 key = 0;
 
-	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
-	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
-	key.pid = pid;
-	bpf_get_current_comm(&key.comm, sizeof(key.comm));
+	if (spec_pid && filter_pid(tgid))
+		return 0;
 
-	u64 *key_samp;
-	key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
-
-	if (key_samp)
-		__sync_fetch_and_add(key_samp, 1);
-	else {
-		bpf_printk("Failed to look up stack sample");
+	cnt = bpf_map_lookup_insert(&event_cnt, &key, &zero);
+	if (cnt)
+		__sync_fetch_and_add(cnt, 1);
+	else
 		return -1;
+
+	if (collect_stack) {
+		struct key_t key;
+		key.pid = tgid;
+		bpf_get_current_comm(&key.comm, sizeof(key.comm));
+		key.kern_stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_FAST_STACK_CMP);
+		key.user_stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
+
+		u64 *key_samp;
+		key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
+
+		if (key_samp)
+			__sync_fetch_and_add(key_samp, 1);
+		else {
+			bpf_printk("Failed to look up stack sample");
+			return -1;
+		}
 	}
+
 	return 0;
 }

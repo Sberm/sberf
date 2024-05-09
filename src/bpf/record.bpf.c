@@ -1,5 +1,5 @@
 /*-*- coding:utf-8                                                          -*-│
-│vi: set ft=c ts=8 sts=8 sw=8 fenc=utf-8                                    :vi│
+│vi: set net ft=c ts=4 sts=4 sw=4 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
 │ Copyright 2024 Howard Chu                                                    │
 │                                                                              │
@@ -33,12 +33,10 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-// specific pid
-volatile bool spec_pid = false;
+volatile bool enable;
+volatile bool spec_pid;
 
-// init value for insertion into map
 static const u64 zero;
-static struct key_t key = {};
 
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
@@ -57,51 +55,29 @@ struct {
 SEC("perf_event")
 int profile(struct bpf_perf_event_data *ctx)
 {
+	if (!enable)
+		return 0;
+
 	u64 id = bpf_get_current_pid_tgid();
 	u32 pid = id >> 32;
 
+	// if to trace only specific pids
 	if (spec_pid && filter_pid(pid))
 		return 0;
 
-	key.pid = pid;
-	// TODO: no comm from BPF side
-	bpf_get_current_comm(&key.comm, sizeof(key.comm));
-	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
-	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK);
+	struct key_t key = {};
 
-	u64* key_samp;
+	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
+	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
+	key.pid = pid;
+	bpf_get_current_comm(&key.comm, sizeof(key.comm));
+
+	u64 *key_samp;
 	key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
 
-	if (key_samp) {
+	if (key_samp)
 		__sync_fetch_and_add(key_samp, 1);
-	} else {
-		bpf_printk("Failed to look up stack sample");
-		return -1;
-	}
-	return 0;
-}
-
-SEC("perf_event")
-int profile2(struct bpf_perf_event_data *ctx)
-{
-	u64 id = bpf_get_current_pid_tgid();
-	u32 pid = id >> 32;
-
-	if (spec_pid && filter_pid(pid))
-		return 0;
-
-	key.pid = pid;
-	// TODO: no comm from BPF side
-	bpf_get_current_comm(&key.comm, sizeof(key.comm));
-	key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
-	key.user_stack_id = bpf_get_stackid(&ctx->regs, &stack_map, BPF_F_USER_STACK);
-
-	u64* key_samp;
-	key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
-
-	if (key_samp) {
-		__sync_fetch_and_add(key_samp, 1);
-	} else {
+	else {
 		bpf_printk("Failed to look up stack sample");
 		return -1;
 	}

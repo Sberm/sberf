@@ -43,6 +43,7 @@
 #include "event.skel.h"
 #include "mem.skel.h"
 #include "off_cpu.skel.h"
+#include "lock.skel.h"
 
 #include "record.h"
 #include "stack.h"
@@ -53,6 +54,9 @@
 
 #define TP_TRGR_PROG(index) skel->progs.tp_trgr_##index
 #define MAX_TP_TRGR_PROG 10 // max tracepoint trigger program
+
+#define LOCK_WAIT "pthread_wait"
+#define LIB_PTHREAD "libpthread.so"
 
 /* global variables for perf poll */
 static struct ksyms *record__ksym_tb;
@@ -426,6 +430,14 @@ int record_print_help(int argc, char **argv, int index)
 	return 0;
 }
 
+void loop_till_interrupt(bool *enable)
+{
+	*enable = true;
+	signal(SIGINT, signalHandler);
+	for (; !done;) {usleep(10 * 1000);}
+	*enable = false;
+}
+
 int cmd_record(int argc, char **argv)
 {
 	if (argc < 3) {
@@ -544,14 +556,9 @@ int record_syscall(int argc, char **argv, int index)
 		}
 	}
 
-	skel->bss->enable = true;
 	skel->bss->collect_stack = env.collect_stack;
 
-	signal(SIGINT, signalHandler);
-
-	for (; !done;) {usleep(10 * 1000);}
-
-	skel->bss->enable = false;
+	loop_till_interrupt(&skel->bss->enable);
 
 	if (env.no_plot || !env.collect_stack) {
 		printf("\n");
@@ -677,13 +684,7 @@ int record_tracepoint(int argc, char **argv, int index)
 		goto cleanup;
 	}
 
-	skel->bss->enable = true;
-
-	signal(SIGINT, signalHandler);
-
-	for (; !done;) {usleep(10 * 1000);}
-
-	skel->bss->enable = false;
+	loop_till_interrupt(&skel->bss->enable);
 
 	if (env.no_plot || !env.collect_stack) {
 		printf("\n");
@@ -818,10 +819,7 @@ int record_pid(int argc, char **argv, int index)
 	}
 	printf("in %d Hz\n", env.sample_freq);
 
-	/* consume sigint */
-	signal(SIGINT, signalHandler);
-
-	for (; !done;) {usleep(10 * 1000);}
+	loop_till_interrupt(&skel->bss->enable);
 
 	if (env.no_plot) {
 		ksym_tb = ksym_load();
@@ -934,18 +932,12 @@ int record_off_cpu(int argc, char **argv, int index)
 		goto cleanup;
 	}
 
-	skel->bss->enable = true;
-
 	printf("Recording OFF-CPU ");
 	for (int i = 0; i < pid_nr; i++)
 		printf("%d ", pids[i]);
 	printf("\n");
 
-	signal(SIGINT, signalHandler);
-
-	for (; !done;) {usleep(10 * 1000);}
-
-	skel->bss->enable = false;
+	loop_till_interrupt(&skel->bss->enable);
 
 	if (env.no_plot) {
 		usym_tb = usym_load(pids, pid_nr);
@@ -1112,11 +1104,6 @@ cleanup:
 	return err;
 }
 
-int record_kprobe(int argc, char **argv, int index)
-{
-	return 0;
-}
-
 int record_uprobe(int argc, char **argv, int index)
 {
 	struct event_bpf *skel;
@@ -1170,13 +1157,7 @@ int record_uprobe(int argc, char **argv, int index)
 		goto cleanup;
 	}
 
-	skel->bss->enable = true;
-
-	signal(SIGINT, signalHandler);
-
-	for (; !done;) {usleep(10 * 1000);}
-
-	skel->bss->enable = false;
+	loop_till_interrupt(&skel->bss->enable);
 
 	if (env.no_plot || !env.collect_stack) {
 		printf("\n");
@@ -1202,4 +1183,71 @@ int record_uprobe(int argc, char **argv, int index)
 cleanup:
 	event_bpf__destroy(skel);
 	return err;
+}
+
+int record_kprobe(int argc, char **argv, int index)
+{
+	return 0;
+}
+
+int record_lock(int argc, char** argv, int index)
+{
+	struct lock_bpf *skel;
+	struct bpf_link *link = NULL;
+	pid_t pids[MAX_PID];
+	size_t pid_nr;
+	int fd, one = 1, err = 0, zero = 0;
+	unsigned long long cnt;
+
+	parse_opts_env(argc, argv, index, uprobe_env, ARRAY_LEN(uprobe_env));
+
+	skel = lock_bpf__open();
+	if (!skel) {
+		fprintf(stderr, "Failed to open and load record's BPF skeleton\n");
+		return 1;
+	}
+
+	err = lock_bpf__load(skel);
+	if (err) {
+		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
+		goto cleanup;
+	}
+
+	pid_nr = split_pid(env.pids, pids);
+	if (!pid_nr) {
+		printf("Please specify pid for recording lock\n");
+		return 0;
+	}
+
+	/* has to be true */
+	skel->bss->spec_pid = true;
+
+	fd = bpf_map__fd(skel->maps.task_filter);
+	for (int i = 0;i < pid_nr;i++)
+		bpf_map_update_elem(fd, &pids[i], &one, BPF_ANY);
+
+	close(fd);
+
+	LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts, .func_name = LOCK_WAIT, .retprobe = false);
+	link = bpf_program__attach_uprobe_opts(skel->progs.uprobe_trgr, pids[0], LIB_PTHREAD, 0, &uprobe_opts);
+	if (link == NULL) {
+		printf("Failed to attach lock's uprobe\n");
+		goto cleanup;
+	}
+
+	err = lock_bpf__attach(skel);
+	if (err) {
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
+
+	loop_till_interrupt(&skel->bss->enable);
+
+	record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
+
+cleanup:
+	lock_bpf__destroy(skel);
+	return err;
+
+	return 0;
 }

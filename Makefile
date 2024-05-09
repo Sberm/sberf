@@ -40,7 +40,7 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 #                                                                               \_ sberf
 
 # bpf.c文件
-BPF_FILE_ := record event mem off_cpu
+BPF_FILE_ := record event mem off_cpu lock
 BPF_FILE := $(addsuffix .bpf.c, $(BPF_FILE_))
 SKEL := $(patsubst %.bpf.c, %.skel.h,$(BPF_FILE))
 SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
@@ -61,7 +61,7 @@ sberf: $(OBJS_FULL)
 # bpf.c --CLANG--> tmp.bpf.o --LLVM_STRIP, BPFTOOL--> bpf.o
 # llvm-strip去除tmp.bpf.o中的DWARF信息
 # bpftool生成bpf.o
-.PRECIOUS: $(SKEL_DIR)/%.bpf.o # don't delete .bpf.o 
+# .PRECIOUS: $(SKEL_DIR)/%.bpf.o # don't delete .bpf.o 
 $(SKEL_DIR)/%.bpf.o: $(BPF_DIR)/%.bpf.c $(SRCDIR)/$(wildcard %.h) $(VMLINUX) $(UTILS) | $(SKEL_DIR)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
@@ -89,8 +89,12 @@ $(OUTPUT)/cli.o: $(SRCDIR)/cli.c $(SRCDIR)/cli.h $(SRCDIR)/sub_commands.h | $(OU
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
 
-$(OUTPUT)/record.o: $(SRCDIR)/record.c $(SRCDIR)/record.h $(SKEL_DIR)/record.skel.h \
-		    $(SKEL_DIR)/mem.skel.h $(SKEL_DIR)/event.skel.h $(SKEL_DIR)/off_cpu.skel.h \
+$(OUTPUT)/record.o: $(SRCDIR)/record.c $(SRCDIR)/record.h \
+		    $(SKEL_DIR)/record.skel.h \
+		    $(SKEL_DIR)/mem.skel.h \
+		    $(SKEL_DIR)/event.skel.h \
+		    $(SKEL_DIR)/off_cpu.skel.h \
+		    $(SKEL_DIR)/lock.skel.h \
 		    $(SRCDIR)/cli.h $(SRCDIR)/sub_commands.h \
 		    $(SRCDIR)/stack.h $(SRCDIR)/plot.h $(SRCDIR)/event.h $(SRCDIR)/off_cpu.h \
 		    $(UTILS) | $(OUTPUT)
