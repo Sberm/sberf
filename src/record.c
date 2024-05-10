@@ -409,16 +409,20 @@ void __record_print_help()
 	              "    sberf record [options]\n\n"
 	              "  Options:\n\n"
 	              "    -p[--pid]: Record running time\n"
-	              "    -t[--tracepoint]: Record tracepoints' triggered time\n"
+	              "    -t[--tracepoint]: Record tracepoints\n"
+	              "    -hw[--hardware]: Record hardware events\n\n"
 	              "    -s[--syscall]: Record stack traces when a syscall is triggered\n"
 	              "    -m[--memory]: Record memory usage\n"
 	              "    -op[--off-cpu]: Record OFF-CPU time\n"
+	              "    -u[--uprobe]: Record user land symbol\n"
 	              "    -h[--help]: Print this help message\n\n"
 
 	              "    -f: Frequency in Hz\n"
 	              "    -np: No plotting, print the stacks instead\n"
 	              "    -a: Record all processes\n"
 	              "    -o: File name for the plot\n"
+	              "    -st: Use it with -t/-s/-u to collect stack traces\n"
+		      "    -obj: Use it with -u to specify binary/dso path\n"
 	              "\n";
 
 	printf("%s", help);
