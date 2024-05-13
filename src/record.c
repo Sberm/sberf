@@ -1077,7 +1077,7 @@ int record_hardware(int argc, char **argv, int index)
 		}
 
 		char br_ms[64];
-		sprintf(br_ms, "%llu (%%%.6f)", cnt_arr[3], (double)cnt_arr[3]/(double)cnt_arr[2]);
+		sprintf(br_ms, "%llu (%%%.6f)", cnt_arr[3], (double)cnt_arr[3] / (double)cnt_arr[2] * 100);
 
 		printf("  %-20s %-64llu\n", "cycles", cnt_arr[0]);
 		printf("  %-20s %-64llu\n", "instructions", cnt_arr[1]);
