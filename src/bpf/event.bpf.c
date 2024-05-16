@@ -30,7 +30,7 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-volatile bool enable;
+volatile bool enabled;
 volatile bool spec_pid;
 volatile bool collect_stack;
 
@@ -77,7 +77,7 @@ TP_TRGR(9)
 SEC("kprobe")
 int kprobe_trgr(void *ctx)
 {
-	if (!enable)
+	if (!enabled)
 		return 0;
 
 	__u64 *cnt, tgid_pid = bpf_get_current_pid_tgid();
@@ -118,7 +118,7 @@ int kprobe_trgr(void *ctx)
 SEC("uprobe")
 int uprobe_trgr(void *ctx)
 {
-	if (!enable)
+	if (!enabled)
 		return 0;
 
 	__u64 *cnt, tgid_pid = bpf_get_current_pid_tgid();

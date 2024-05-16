@@ -33,7 +33,7 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-volatile bool enable;
+volatile bool enabled;
 volatile bool spec_pid;
 
 static const u64 zero;
@@ -55,7 +55,7 @@ struct {
 SEC("perf_event")
 int profile(struct bpf_perf_event_data *ctx)
 {
-	if (!enable)
+	if (!enabled)
 		return 0;
 
 	u64 id = bpf_get_current_pid_tgid();

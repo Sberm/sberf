@@ -28,7 +28,7 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-volatile bool enable;
+volatile bool enabled;
 volatile bool spec_pid;
 
 struct task_struct___new {
@@ -95,7 +95,7 @@ SEC("tp_btf/sched_switch")
 int sched_switch(u64 *ctx)
 {
 
-	if (!enable)
+	if (!enabled)
 		return 0;
 
 	u64 ts = bpf_ktime_get_ns();

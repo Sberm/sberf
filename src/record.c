@@ -434,12 +434,12 @@ int record_print_help(int argc, char **argv, int index)
 	return 0;
 }
 
-void loop_till_interrupt(bool *enable)
+void loop_till_interrupt(bool *enabled)
 {
-	*enable = true;
+	*enabled = true;
 	signal(SIGINT, signalHandler);
 	for (; !done;) {usleep(10 * 1000);}
-	*enable = false;
+	*enabled = false;
 }
 
 int cmd_record(int argc, char **argv)
@@ -562,7 +562,7 @@ int record_syscall(int argc, char **argv, int index)
 
 	skel->bss->collect_stack = env.collect_stack;
 
-	loop_till_interrupt(&skel->bss->enable);
+	loop_till_interrupt(&skel->bss->enabled);
 
 	if (env.no_plot || !env.collect_stack) {
 		printf("\n");
@@ -688,7 +688,7 @@ int record_tracepoint(int argc, char **argv, int index)
 		goto cleanup;
 	}
 
-	loop_till_interrupt(&skel->bss->enable);
+	loop_till_interrupt(&skel->bss->enabled);
 
 	if (env.no_plot || !env.collect_stack) {
 		printf("\n");
@@ -823,7 +823,7 @@ int record_pid(int argc, char **argv, int index)
 	}
 	printf("in %d Hz\n", env.sample_freq);
 
-	loop_till_interrupt(&skel->bss->enable);
+	loop_till_interrupt(&skel->bss->enabled);
 
 	if (env.no_plot) {
 		ksym_tb = ksym_load();
@@ -941,7 +941,7 @@ int record_off_cpu(int argc, char **argv, int index)
 		printf("%d ", pids[i]);
 	printf("\n");
 
-	loop_till_interrupt(&skel->bss->enable);
+	loop_till_interrupt(&skel->bss->enabled);
 
 	if (env.no_plot) {
 		usym_tb = usym_load(pids, pid_nr);
@@ -1161,7 +1161,7 @@ int record_uprobe(int argc, char **argv, int index)
 		goto cleanup;
 	}
 
-	loop_till_interrupt(&skel->bss->enable);
+	loop_till_interrupt(&skel->bss->enabled);
 
 	if (env.no_plot || !env.collect_stack) {
 		printf("\n");
@@ -1233,7 +1233,7 @@ int record_lock(int argc, char** argv, int index)
 	close(fd);
 
 	LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts, .func_name = LOCK_WAIT, .retprobe = false);
-	link = bpf_program__attach_uprobe_opts(skel->progs.uprobe_trgr, pids[0], LIB_PTHREAD, 0, &uprobe_opts);
+	link = bpf_program__attach_uprobe_opts(skel->progs.enter_wait, pids[0], LIB_PTHREAD, 0, &uprobe_opts);
 	if (link == NULL) {
 		printf("Failed to attach lock's uprobe\n");
 		goto cleanup;
@@ -1245,9 +1245,9 @@ int record_lock(int argc, char** argv, int index)
 		goto cleanup;
 	}
 
-	loop_till_interrupt(&skel->bss->enable);
+	loop_till_interrupt(&skel->bss->enabled);
 
-	record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
+	// record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
 
 cleanup:
 	lock_bpf__destroy(skel);

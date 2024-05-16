@@ -24,29 +24,40 @@
 
 #define MAX_ENTRIES 204800
 #define MAX_STACKS 32
-#define MAX_EVENTS 10
+#define MAX_ 10
 #define MAX_HW 10
 #define TASK_COMM_LEN 16
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-volatile bool enable;
+volatile bool enabled;
 volatile bool spec_pid;
 volatile bool collect_stack;
 
-struct key_t {
-	__u32 pid;
-	int user_stack_id;
-	int kern_stack_id;
-	char comm[TASK_COMM_LEN];
+struct lock_key {
+	int pid;
+	int tgid;
+	int stack_id;
+};
+
+struct internal_data {
+	int stack_id;
+	__u64 ts;
 };
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__type(key, __u32);
+	__type(key, int); // pid
+	__type(value, struct internal_data);
+	__uint(max_entries, MAX_ENTRIES);
+} internal SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, struct lock_key);
 	__type(value, __u64);
-	__uint(max_entries, MAX_EVENTS);
-} event_cnt SEC(".maps");
+	__uint(max_entries, MAX_ENTRIES);
+} wait_time SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
@@ -55,50 +66,60 @@ struct {
 	__uint(max_entries, MAX_ENTRIES);
 } stack_map SEC(".maps");
 
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, struct key_t);
-    __type(value, __u64);
-    __uint(max_entries, MAX_ENTRIES);
-} sample SEC(".maps");
-
 SEC("uprobe")
-int uprobe_trgr(void *ctx)
+int exit_wait(void *ctx)
 {
-	if (!enable)
+	if (!enabled)
 		return 0;
 
-	__u64 *cnt, tgid_pid = bpf_get_current_pid_tgid();
-	__u64 zero = 0;
-	pid_t tgid = tgid_pid >> 32;
-	__u32 key = 0;
+	__u64 ts = bpf_ktime_get_ns();
+	__u64 *last, tgid_pid = bpf_get_current_pid_tgid(), zero = 0;
+	int tgid = tgid_pid >> 32, pid = tgid_pid;
+	struct internal_data *d;
 
 	if (spec_pid && filter_pid(tgid))
 		return 0;
 
-	cnt = bpf_map_lookup_insert(&event_cnt, &key, &zero);
-	if (cnt)
-		__sync_fetch_and_add(cnt, 1);
-	else
-		return -1;
-
-	if (collect_stack) {
-		struct key_t key;
-		key.pid = tgid;
-		bpf_get_current_comm(&key.comm, sizeof(key.comm));
-		key.kern_stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_FAST_STACK_CMP);
-		key.user_stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
-
-		u64 *key_samp;
-		key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
-
-		if (key_samp)
-			__sync_fetch_and_add(key_samp, 1);
-		else {
-			bpf_printk("Failed to look up stack sample");
-			return -1;
-		}
+	d = bpf_map_lookup_elem(&internal, &pid);
+	if (d) {
+		struct lock_key k = {
+			.pid = pid,
+			.tgid = tgid,
+			.stack_id = d->stack_id,
+		};
+		ts = ts - d->ts;
+		// TODO: what if the same pid & stack_id tuple appears
+		// twice
+		bpf_map_update_elem(&wait_time, &k, &ts, BPF_ANY); 
 	}
+
+	return 0;
+}
+
+SEC("uprobe")
+int enter_wait(void *ctx)
+{
+	if (!enabled)
+		return 0;
+
+	__u64 ts = bpf_ktime_get_ns();
+	__u64 *last, tgid_pid = bpf_get_current_pid_tgid(), zero = 0;
+	int stack_id, tgid = tgid_pid >> 32, pid = tgid_pid;
+
+	if (spec_pid && filter_pid(tgid))
+		return 0;
+		
+	stack_id = bpf_get_stackid(ctx, &stack_map, 
+				       BPF_F_USER_STACK | \
+				       BPF_F_FAST_STACK_CMP);
+
+	struct internal_data d = {
+		.stack_id = stack_id,
+		.ts = ts,
+	};
+
+
+	bpf_map_update_elem(&internal, &pid, &d, BPF_ANY);
 
 	return 0;
 }

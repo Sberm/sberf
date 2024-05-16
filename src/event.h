@@ -24,7 +24,7 @@
 SEC("tp")                                                                                     \
 int tp_trgr_##index(void *ctx)                                                                \
 {                                                                                             \
-	if (!enable)                                                                          \
+	if (!enabled)                                                                         \
 		return 0;                                                                     \
 	__u64 *cnt, pid_tgid = bpf_get_current_pid_tgid(), zero = 0, *key_samp;               \
 	pid_t pid = pid_tgid >> 32;                                                           \
