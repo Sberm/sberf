@@ -43,5 +43,6 @@ int record_numa(int argc, char** argv, int index);
 int record_hardware(int argc, char** argv, int index);
 int record_uprobe(int argc, char** argv, int index);
 int record_kprobe(int argc, char** argv, int index);
+int record_lock(int argc, char** argv, int index);
 
 #endif
