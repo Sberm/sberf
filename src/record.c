@@ -185,11 +185,10 @@ static void signalHandler(int signum)
 
 int parse_hardware_flag(char *str)
 {
-	for (int i = 0; i < ARRAY_LEN(hardware_map); i++) {
-		if (strcmp(str, hardware_map[i].type_name) == 0) {
+	for (int i = 0; i < ARRAY_LEN(hardware_map); i++)
+		if (strcmp(str, hardware_map[i].type_name) == 0)
 			return hardware_map[i].type;
-		}
-	}
+
 	return -1;
 }
 
@@ -211,8 +210,7 @@ int print_stack_frame(unsigned long long *frame, unsigned long long sample_num, 
 		}
 	} else if (mode == 'o') {
 		printf("[off-cpu] %.5fms:\n", (double)sample_num / 1000000UL);
-		int i = 0;
-		for (; frame[i] && i < MAX_STACKS; i++) {
+		for (int i = 0; frame[i] && i < MAX_STACKS; i++) {
 			usym_addr_to_sym((struct usyms*)sym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}

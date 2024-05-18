@@ -24,6 +24,7 @@
 #include <elf.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #define KSYM_PATH "/proc/kallsyms"
 
@@ -51,9 +52,9 @@ struct dso {
 	unsigned long offset;
 	char path[1024];
 	struct sym_map *sym;
-	/* sym map's length */
 	unsigned int length;
 	unsigned int capacity;
+	bool loaded;
 };
 
 struct usyms {
@@ -77,8 +78,9 @@ int ksym_addr_to_sym(const struct ksyms *ksym_tb, const unsigned long long addr,
 struct usyms* usym_load(const int *pids, int length);
 int usym_init(struct usyms* usym_tb);
 int usym_add(struct usyms *usym_tb, const char *path, 
-             const unsigned long long start_addr, const unsigned long long end_addr,
-			 const unsigned long offset);
+             const unsigned long long start_addr,
+	     const unsigned long long end_addr,
+	     const unsigned long offset);
 int usym_free(struct usyms *usym_tb);
 int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr, char *str);
 
@@ -319,12 +321,12 @@ int usym_init(struct usyms *usym_tb)
 }
 
 int usym_add(struct usyms *usym_tb, const char *path, 
-             const unsigned long long start_addr, const unsigned long long end_addr,
-			 const unsigned long offset)
+             const unsigned long long start_addr,
+	     const unsigned long long end_addr,
+	     const unsigned long offset)
 {
 	if (usym_tb->dsos && usym_tb->length + 1 > usym_tb->capacity) {
-		/* 128 -> 256 */
-		unsigned int to_alloc = usym_tb->capacity * 2;
+		unsigned int to_alloc = usym_tb->capacity << 1;
 		usym_tb->dsos = realloc(usym_tb->dsos, sizeof(struct dso) * to_alloc);
 		if (usym_tb->dsos == NULL) {
 			printf("Failed to reallocate userspace symbol table\n");
@@ -352,18 +354,16 @@ int usym_add(struct usyms *usym_tb, const char *path,
 	strcpy(dso_p->path, path);
 	++usym_tb->length;
 
-	if (dso_load(dso_p)) {
-		printf("Failed to load dso %s\n", dso_p->path);
-		return -1;
-	}
-
-	// sort dso
-	qsort(dso_p->sym, dso_p->length, sizeof(struct sym_map), dso_compar);
+	// if (dso_load(dso_p)) {
+	// 	printf("Failed to load dso %s\n", dso_p->path);
+	// 	return -1;
+	// }
+	// qsort(dso_p->sym, dso_p->length, sizeof(struct sym_map), dso_compar);
 
 	return 0;
 }
 
-struct usyms* usym_load(const int *pids, int length)
+struct usyms* usym_load(const int *pids, int pid_nr)
 {
 	struct usyms *usym_tb = malloc(sizeof(struct usyms));
 	usym_init(usym_tb);
@@ -377,7 +377,7 @@ struct usyms* usym_load(const int *pids, int length)
 	char type[5];
 	unsigned int inode;
 
-	for (int i = 0;i < length;i++) {
+	for (int i = 0;i < pid_nr;i++) {
 		/* read maps of process to get all dso */
 		sprintf(maps_path, "/proc/%d/maps", pids[i]);
 		fp = fopen(maps_path, "r");
@@ -388,6 +388,7 @@ struct usyms* usym_load(const int *pids, int length)
 		while (1) {
 			int ret = fscanf(fp, "%llx-%llx %s %x %*x:%*x %u%[^\n]\n", &start_addr, &end_addr, type, &offset, &inode, path);
 			remove_space(path, ARRAY_LEN(path));
+
 			if (ret == EOF)
 				break;
 			if (inode == 0 || type[3] == 's')
@@ -396,17 +397,20 @@ struct usyms* usym_load(const int *pids, int length)
 				printf("Failed to read user maps\n");
 				goto usym_load_cleanup;
 			}
-			/* discard duplicated path */
+
+			/* for duplicated path, update the largest address number */
 			if (strcmp(last_path, path) == 0) {
-				/* for duplicated path, update the largest address number */
 				struct dso *last_dso = &usym_tb->dsos[usym_tb->length - 1];
 				last_dso->end_addr = end_addr;
 				continue;
 			}
+
 			/* duplicated dsos from different pids */
 			if (dso_find(usym_tb, start_addr) != -1)
 				continue;
+
 			strcpy(last_path, path);
+
 			err = usym_add(usym_tb, path, start_addr, end_addr, offset);
 			if (err) {
 				printf("Failed to read dso %s\n", path);
@@ -417,14 +421,15 @@ struct usyms* usym_load(const int *pids, int length)
 
 	if (fp != NULL)
 		fclose(fp);
+
 	return usym_tb;
 
 usym_load_cleanup:
 	if (fp != NULL)
 		fclose(fp);
+
 	usym_free(usym_tb);
 	free(usym_tb);
-	usym_tb = NULL;
 	return NULL;
 }
 
@@ -436,9 +441,7 @@ int usym_free(struct usyms *usym_tb)
 			exit(-1);
 		}
 	}
-
 	free(usym_tb->dsos);
-	usym_tb->dsos = NULL;
 	return 0;
 }
 
@@ -450,16 +453,24 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	int middle;
 	int max_high = high;
 	unsigned long long middle_addr, res_offset = 0;
+	struct dso *to_load, dso_;
+	char res[128];
+	unsigned long long dso_offset;
 
 	/* low is the index of the dso we want */
 	low = dso_find(usym_tb, addr);
 
-	if (low == -1)
+	if (low == -1) {
 		goto usym_unknown;
+	} else if (usym_tb->dsos[low].loaded == false) {
+		to_load = &usym_tb->dsos[low];
+		dso_load(to_load);
+		to_load->loaded = true;
+	}
 
 	/* low is the dso index we dive into */
-	unsigned long long dso_offset = usym_tb->dsos[low].start_addr;
-	struct dso dso_ = usym_tb->dsos[low];
+	dso_offset = usym_tb->dsos[low].start_addr;
+	dso_ = usym_tb->dsos[low];
 
 	if (dso_.length <= 0)
 		goto usym_unknown;
@@ -469,7 +480,6 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 	max_high = high;
 
 	while (low <= high) {
-
 		middle = (low + high) / 2;
 		middle_addr = dso_.sym[middle].addr + dso_offset;
 
@@ -497,7 +507,6 @@ int usym_addr_to_sym(const struct usyms *usym_tb, const unsigned long long addr,
 		}
 	}
 
-	char res[128];
 	// res_offset == 0 ? sprintf(res, "%s",dso_.sym[low].name) : sprintf(res, "%s+0x%llx", dso_.sym[low].name, res_offset);
 	sprintf(res, "%s", dso_.sym[low].name);
 
@@ -557,7 +566,6 @@ dso_load_cleanup:
 int dso_free(struct dso *dso_p)
 {
 	free(dso_p->sym);
-	dso_p->sym = NULL;
 	return 0;
 }
 
