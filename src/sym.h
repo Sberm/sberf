@@ -520,24 +520,30 @@ usym_unknown:
 
 int dso_load(struct dso *dso_p)
 {
-	FILE* fp = fopen(dso_p->path, "rb");
+	FILE* fp = NULL; 
+	char ident[EI_NIDENT];
+	int rc; 
+	int err = 0;
+
+	fp = fopen(dso_p->path, "rb");
 	if (fp == NULL) {
 		printf("Failed to open file %s\n", dso_p->path);
 		return -1;
 	}
-	char ident[EI_NIDENT];
-	int rc = fread(ident, sizeof(ident), 1, fp);
-	int err = 0;
+
+	rc = fread(ident, sizeof(ident), 1, fp);
 	if (rc != 1) {
 		printf("Failed to read ident\n");
 		err = -1;
 		goto dso_load_cleanup;
 	}
+
 	if (ident[0] != 0x7f) {
 		// printf("%s is not an ELF file\n", dso_p->path);
 		// err = -1;
 		goto dso_load_cleanup;
 	}
+
 	/* rewind fp */
 	rc = fseek(fp, 0, SEEK_SET);
 	if (rc < 0) {
@@ -560,9 +566,6 @@ dso_load_cleanup:
 	return err;
 }
 
-/*
- * Only need to free dso's sym
- */
 int dso_free(struct dso *dso_p)
 {
 	free(dso_p->sym);
@@ -582,19 +585,22 @@ int dso_find(const struct usyms* usym_tb, unsigned long long addr) {
 int elf_parse(FILE *fp, struct dso *dso_p)
 {
 	Elf64_Ehdr ehdr;
-	int rc = fread(&ehdr, sizeof(ehdr), 1, fp);
-	int err = 0;
+	Elf64_Phdr phdr;
+	Elf64_Sym symb;
+	int i, link, flink, ix;
+	int rc = fread(&ehdr, sizeof(ehdr), 1, fp), err = 0;
+	int num = ehdr.e_phnum;
+	int sz = ehdr.e_phentsize;
+	unsigned long long offset = ehdr.e_phoff, p_vaddr, p_size;
+	unsigned long long faddr, fsize, size, item_size;
+	char fname[128];
+
 	if (rc != 1) {
 		printf("Failed to read elf header\n");
 		err = -1;
 		goto elf_parse_err;
 	}
 
-	int num = ehdr.e_phnum;
-	int sz = ehdr.e_phentsize;
-	unsigned long long offset = ehdr.e_phoff, p_vaddr, p_size;
-	Elf64_Phdr phdr;
-	int i;
 	for (i = 0;i < num; i++) {
 		if (fseek(fp, offset, SEEK_SET)) {
 			printf("Failed to seek\n");
@@ -646,13 +652,6 @@ int elf_parse(FILE *fp, struct dso *dso_p)
 		offset += sz;
 	}
 
-	Elf64_Sym symb;
-	unsigned long long faddr, fsize;
-	unsigned long long size, item_size;
-
-	int link, flink, ix;
-
-	char fname[128];
 	for (int i = 0;i < num;i++) {
 		switch(headers[i].sh_type) {
 		case SHT_SYMTAB:
@@ -715,5 +714,6 @@ elf_parse_cleanup:
 elf_parse_err:
 	return err;
 }
+
 #endif // SYM_H_NO_DEF
 #endif // SYM_H

@@ -173,6 +173,12 @@ static struct hardware_mapping hardware_map[] = {
 	{"ref-cycles", PERF_COUNT_HW_REF_CPU_CYCLES},
 };
 
+enum PRINT_MODE {
+	PRINT_USER,
+	PRINT_KERNEL,
+	PRINT_OFF_CPU,
+};
+
 struct tp_name {
 	char category[16];
 	char name[48];
@@ -192,23 +198,23 @@ int parse_hardware_flag(char *str)
 	return -1;
 }
 
-// TODO: use enum
-int print_stack_frame(unsigned long long *frame, unsigned long long sample_num, char mode, void* sym_tb)
+int print_stack_frame(unsigned long long *frame, unsigned long long sample_num, enum PRINT_MODE mode, void* sym_tb)
 {
 	char name[128];
-	if (mode == 'k') {
+	switch (mode) {
+	case PRINT_KERNEL:
 		printf("[kernel] %lu samples:\n", sample_num);
 		for (int i = 0; frame[i] && i < MAX_STACK_DEPTH; i++) {
 			ksym_addr_to_sym((struct ksyms*)sym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}
-	} else if (mode == 'u') {
+	case PRINT_USER:
 		printf("[user] %lu samples:\n", sample_num);
 		for (int i = 0; frame[i] && i < MAX_STACK_DEPTH; i++) {
 			usym_addr_to_sym((struct usyms*)sym_tb, frame[i], name);
 			printf("  %lx %s\n", frame[i], name);
 		}
-	} else if (mode == 'o') {
+	case PRINT_OFF_CPU:
 		printf("[off-cpu] %.5fms:\n", (double)sample_num / 1000000UL);
 		for (int i = 0; frame[i] && i < MAX_STACKS; i++) {
 			usym_addr_to_sym((struct usyms*)sym_tb, frame[i], name);
@@ -252,14 +258,14 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 			if (env.debug && err)
 				printf("\n[kernel stack lost]\n");
 			else
-				print_stack_frame(frame, sample_num, 'k', ksym_tb);
+				print_stack_frame(frame, sample_num, PRINT_KERNEL, ksym_tb);
 		}
 
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->user_stack_id, frame);
 		if (env.debug && err)
 			printf("\n[user stack lost]\n");
 		else
-			print_stack_frame(frame, sample_num, 'u', usym_tb);
+			print_stack_frame(frame, sample_num, PRINT_USER, usym_tb);
 
 		last_key = cur_key;
 	} 
@@ -296,7 +302,7 @@ void print_stack_off_cpu(struct bpf_map *stack_map, struct bpf_map *off_cpu_data
 			printf("Failed to print off-cpu samples\n");
 		} else {
 			printf("PID %d\n", cur_key->tgid);
-			print_stack_frame(frame, data, 'o', usym_tb);
+			print_stack_frame(frame, data, PRINT_OFF_CPU, usym_tb);
 		}
 
 		last_key = cur_key;
