@@ -27,10 +27,8 @@
 
 struct key_t {
 	__u32 pid;
-	int user_stack_id;
-	int kern_stack_id;
-	// TODO: delete this crap
-	char comm[TASK_COMM_LEN];
+	int ustack_id;
+	int kstack_id;
 };
 
 int record_syscall(int argc, char** argv, int index);

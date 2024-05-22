@@ -36,10 +36,8 @@ volatile bool collect_stack;
 
 struct key_t {
 	__u32 pid;
-	int user_stack_id;
-	int kern_stack_id;
-	// TODO: delete this crap
-	char comm[TASK_COMM_LEN];
+	int ustack_id;
+	int kstack_id;
 };
 
 struct {
@@ -97,9 +95,8 @@ int kprobe_trgr(void *ctx)
 	if (collect_stack) {
 		struct key_t key;
 		key.pid = tgid;
-		bpf_get_current_comm(&key.comm, sizeof(key.comm));
-		key.kern_stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_FAST_STACK_CMP);
-		key.user_stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
+		key.kstack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_FAST_STACK_CMP);
+		key.ustack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
 
 		u64 *key_samp;
 		key_samp = bpf_map_lookup_insert(&sample, &key, &zero);
@@ -138,9 +135,8 @@ int uprobe_trgr(void *ctx)
 	if (collect_stack) {
 		struct key_t key;
 		key.pid = tgid;
-		bpf_get_current_comm(&key.comm, sizeof(key.comm));
-		key.kern_stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_FAST_STACK_CMP);
-		key.user_stack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
+		key.kstack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_FAST_STACK_CMP);
+		key.ustack_id = bpf_get_stackid(ctx, &stack_map, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
 
 		u64 *key_samp;
 		key_samp = bpf_map_lookup_insert(&sample, &key, &zero);

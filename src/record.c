@@ -252,16 +252,16 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 		sample_num_total += sample_num;
 
 		/* stack frame */
-		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kern_stack_id, frame);
+		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kstack_id, frame);
 		/* kernel stack not available */
-		if (cur_key->kern_stack_id != -EFAULT) {
+		if (cur_key->kstack_id != -EFAULT) {
 			if (env.debug && err)
 				printf("\n[kernel stack lost]\n");
 			else
 				print_stack_frame(frame, sample_num, PRINT_KERNEL, ksym_tb);
 		}
 
-		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->user_stack_id, frame);
+		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->ustack_id, frame);
 		if (env.debug && err)
 			printf("\n[user stack lost]\n");
 		else

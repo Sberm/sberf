@@ -65,7 +65,7 @@ int stack_walk(struct stack_ag* p)
 
 struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int *pid_nr)
 {
-	struct stack_ag *stack_ag_p = NULL, *comm_p = NULL;
+	struct stack_ag *stack_ag_p = NULL;
 
 	int stack_map_fd = bpf_map__fd(stack_map);
 	int sample_fd = bpf_map__fd(sample);
@@ -102,8 +102,7 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 			}
 
 			stack_ag_p->cnt += sample_time;
-			comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
-			stack_insert(comm_p, frame, sample_time, MAX_STACK_DEPTH);
+			stack_insert(stack_ag_p, frame, sample_time, MAX_STACK_DEPTH);
 			++cnt;
 		}
 
@@ -120,7 +119,7 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 
 struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int *pid_nr)
 {
-	struct stack_ag *stack_ag_p = NULL, *comm_p = NULL;
+	struct stack_ag *stack_ag_p = NULL;
 
 	int stack_map_fd = bpf_map__fd(stack_map);
 	int sample_fd = bpf_map__fd(sample);
@@ -155,20 +154,19 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 		bpf_map_lookup_elem(sample_fd, cur_key, &sample_num);
 
 		/* stack frame */
-		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kern_stack_id, frame);
+		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kstack_id, frame);
 		/* kernel stack not available */
-		if (cur_key->kern_stack_id != -EFAULT) {
+		if (cur_key->kstack_id != -EFAULT) {
 			if (DEBUG && err)
 				printf("\n[kernel stack lost]\n");
 			else {
 				stack_ag_p->cnt += sample_num;
-				comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
-				stack_insert(comm_p, frame, sample_num, MAX_STACK_DEPTH);
+				stack_insert(stack_ag_p, frame, sample_num, MAX_STACK_DEPTH);
 				++cnt;
 			}
 		}
 
-		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->user_stack_id, frame);
+		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->ustack_id, frame);
 		if (DEBUG && err)
 			printf("\n[user stack lost]\n");
 		else {
@@ -178,8 +176,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 			}
 
 			stack_ag_p->cnt += sample_num;
-			comm_p = comm_lookup_insert(stack_ag_p, cur_key->comm);
-			stack_insert(comm_p, frame, sample_num, MAX_STACK_DEPTH);
+			stack_insert(stack_ag_p, frame, sample_num, MAX_STACK_DEPTH);
 			++cnt;
 		}
 
@@ -194,50 +191,50 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 	return stack_ag_p;
 }
 
-struct stack_ag *comm_lookup_insert(struct stack_ag *stack_ag_p, char* comm)
-{
-	struct stack_ag *p, *pp, *q, *p_parent;
-	p = stack_ag_p->child;
-	p_parent = stack_ag_p;
-	pp = p;
-	q = NULL;
-
-	int flag = 0;
-
-	/* if command doesn't match, add a new one */
-	while (pp) {
-		if (strcmp(pp->comm, comm) == 0) {
-			p_parent = pp;
-			flag = 1;
-			break;
-		}
-		q = pp;
-		pp = pp->next;
-	}
-
-	if (!flag) {
-		struct stack_ag *tmp = malloc(sizeof(struct stack_ag));
-		if (tmp == NULL) {
-			return NULL;
-		}
-
-		tmp->next = NULL;
-		tmp->addr = 0;
-		tmp->child = NULL;
-		strcpy(tmp->comm, comm);
-		tmp->cnt = 0;
-		tmp->is_comm = true;
-
-		if (q) {
-			q->next = tmp;
-		} else {
-			p_parent->child = tmp;
-		}
-		p_parent = tmp;
-	}
-
-	return p_parent;
-}
+// struct stack_ag *comm_lookup_insert(struct stack_ag *stack_ag_p, char* comm)
+// {
+// 	struct stack_ag *p, *pp, *q, *p_parent;
+// 	p = stack_ag_p->child;
+// 	p_parent = stack_ag_p;
+// 	pp = p;
+// 	q = NULL;
+// 
+// 	int flag = 0;
+// 
+// 	/* if command doesn't match, add a new one */
+// 	while (pp) {
+// 		if (strcmp(pp->comm, comm) == 0) {
+// 			p_parent = pp;
+// 			flag = 1;
+// 			break;
+// 		}
+// 		q = pp;
+// 		pp = pp->next;
+// 	}
+// 
+// 	if (!flag) {
+// 		struct stack_ag *tmp = malloc(sizeof(struct stack_ag));
+// 		if (tmp == NULL) {
+// 			return NULL;
+// 		}
+// 
+// 		tmp->next = NULL;
+// 		tmp->addr = 0;
+// 		tmp->child = NULL;
+// 		strcpy(tmp->comm, comm);
+// 		tmp->cnt = 0;
+// 		tmp->is_comm = true;
+// 
+// 		if (q) {
+// 			q->next = tmp;
+// 		} else {
+// 			p_parent->child = tmp;
+// 		}
+// 		p_parent = tmp;
+// 	}
+// 
+// 	return p_parent;
+// }
 
 int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, unsigned long long sample_num, int frame_sz)
 {
