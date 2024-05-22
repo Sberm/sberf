@@ -24,8 +24,34 @@
 #include "stack.h"
 #include "plot.h"
 #include "util.h"
-#define SYM_H_NO_DEF // don't include definition of sym.h, because it is included in record.c
+/*
+ * don't include definition of sym.h, 
+ * because it is included in record.c
+ */
+#define SYM_H_NO_DEF 
 #include "sym.h"
+
+int color_index = 0;
+const int *color_palette;
+int color_palette_sz;
+
+char* svg_str;
+int svg_sz = 65536;
+int svg_index = 0;
+
+#define MAX_WIDTH 1200.0
+double max_height = 0;
+
+// x start
+#define X_ST 10.0
+
+#define FRAME_HEIGHT 15.4
+#define Y_MARGIN 0.5
+
+enum PLOT_MODE {
+	PLOT_CYCLE,
+	PLOT_OFF_CPU,
+} plot_mode;
 
 static const int blue[] = {
 	0x42E5CA,
@@ -199,31 +225,12 @@ static const char js[] = "<script><![CDATA[\n"
 "}, false)\n"
 "]]></script>\n";
 
-int color_index = 0;
-const int *color_palette;
-int color_palette_sz;
-
-char* svg_str;
-int svg_sz = 65536;
-int svg_index = 0;
-
-#define MAX_WIDTH 1200.0
-double max_height = 0;
-
-// x start
-#define X_ST 10.0
-
-enum PLOT_MODE {
-	PLOT_CYCLE,
-	PLOT_OFF_CPU,
-} plot_mode;
-
-void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, int depth, struct ksyms* ksym_tb, struct usyms* usym_tb)
+void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double y, double len, int depth, struct ksyms* ksym_tb, struct usyms* usym_tb)
 {
 	if (p == NULL)
 		return;
 
-	double y = depth * FRAME_HEIGHT;
+	// double y = depth * FRAME_HEIGHT;
 	double width = ((double)p->cnt / (double)p_cnt) * len;
 	double height = FRAME_HEIGHT;
 	int c = color_palette[color_index];
@@ -276,8 +283,8 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double len, 
 	strcpy(svg_str + svg_index , g_str);
 	svg_index += strlen(g_str);
 
-	__plot(p->next, p_cnt, x + width, len, depth, ksym_tb, usym_tb);
-	__plot(p->child, p->cnt, x, width, depth + 1, ksym_tb, usym_tb);
+	__plot(p->next, p_cnt, x + width, y, len, depth, ksym_tb, usym_tb);
+	__plot(p->child, p->cnt, x, y + FRAME_HEIGHT + Y_MARGIN, width, depth + 1, ksym_tb, usym_tb);
 }
 
 int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
@@ -325,7 +332,7 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 	plot_mode = PLOT_OFF_CPU;
 	
 	/* write svg to svg_str */
-	__plot(p, p->cnt, X_ST, MAX_WIDTH, 0, ksym_tb, usym_tb);
+	__plot(p, p->cnt, X_ST, 0, MAX_WIDTH, 0, ksym_tb, usym_tb);
 
 	fprintf(fp, "<svg version='1.1' width='%.0f' height='%.0f' "
 		"onload='main(evt)' viewBox='0 0 %.0f %.0f' xmlns='http://www.w3.org/2000/svg' "
@@ -391,7 +398,7 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 
 	plot_mode = PLOT_CYCLE;
 	
-	__plot(p, p->cnt, X_ST, MAX_WIDTH, 0, ksym_tb, usym_tb);
+	__plot(p, p->cnt, X_ST, 0, MAX_WIDTH, 0, ksym_tb, usym_tb);
 
 	fprintf(fp, "<svg version='1.1' width='%.0f' height='%.0f' "
 		"onload='main(evt)' viewBox='0 0 %.0f %.0f' "
