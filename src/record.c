@@ -1251,8 +1251,6 @@ int record_lock(int argc, char** argv, int index)
 
 	loop_till_interrupt(&skel->bss->enabled);
 
-	// record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
-
 cleanup:
 	lock_bpf__destroy(skel);
 	return err;
