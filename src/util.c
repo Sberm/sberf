@@ -36,14 +36,12 @@ void *print_loading(void *_args)
 
 	while (true) {
 		printf("\33[%dD", strlen(str) + DOTS_NR);
-
 		printf("\33[0K");
-
 		printf("%s", str);
 		fflush(stdout);
+
 		for (int j = 0; j < DOTS_NR; j++) {
-			/* 400ms */
-			usleep(4 * 100000);
+			usleep(4 * 100000); // 400ms
 			printf("%c", dot);
 			fflush(stdout);
 		}

@@ -297,9 +297,6 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 
 	pthread_create(&loading, NULL, print_loading, (void *)&la);
 
-	// printf("\nloading symbols...");
-	// fflush(stdout);
-
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);
 	if (ksym_tb == NULL || usym_tb == NULL) {
@@ -366,8 +363,6 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 	max_height = stack_get_depth(p) * FRAME_HEIGHT;
 
 	pthread_create(&loading, NULL, print_loading, (void *)&la);
-
-	// printf("\nloading symbols...");
 
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);
