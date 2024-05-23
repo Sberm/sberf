@@ -7,7 +7,7 @@
 ![](images/sberf-graph.png)
 
 ## Sberf
-Profiling/tracing/visualizing tool based on eBPF
+Profiling/tracing/visualization tool based on eBPF
 
 #### Quick start
 
