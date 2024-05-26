@@ -291,7 +291,7 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 {
 	struct ksyms* ksym_tb;
 	struct usyms* usym_tb;
-	pthread_t loading;
+	pthread_t loading_thread;
 	struct loading_args la = {
 		.str = "loading symbols",
 		.dot = '.',
@@ -302,7 +302,7 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 
 	max_height = stack_get_depth(p) * FRAME_HEIGHT;
 
-	pthread_create(&loading, NULL, print_loading, (void *)&la);
+	pthread_create(&loading_thread, NULL, print_loading, (void *)&la);
 
 	ksym_tb = ksym_load();
 	usym_tb = usym_load(pids, num_of_pids);
@@ -311,7 +311,7 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 		return -1;
 	}
 
-	pthread_cancel(loading);
+	pthread_cancel(loading_thread);
 
 	printf("\nloaded.\n");
 	
