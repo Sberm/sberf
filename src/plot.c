@@ -27,6 +27,7 @@
 /*
  * don't include definition of sym.h, 
  * because it is included in record.c
+ * therefore multiple definition
  */
 #define SYM_H_NO_DEF 
 #include "sym.h"
