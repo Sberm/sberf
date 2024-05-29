@@ -856,6 +856,9 @@ int record_mem(int argc, char **argv, int index)
 	size_t pid_nr;
 	pid_t pids[MAX_PID];
 
+	printf("sberf record -m[--memory] is under development, coming soon\n");
+	exit(0);
+
 	parse_opts_env(argc, argv, index, mem_env, ARRAY_LEN(mem_env));
 
 	skel = mem_bpf__open();
@@ -864,7 +867,6 @@ int record_mem(int argc, char **argv, int index)
 		return 1;
 	}
 
-	/* pids to trace */
 	pid_nr = split_pid(env.pids, pids);
 	if (!pid_nr) {
 		__record_print_help();
@@ -885,14 +887,11 @@ int record_mem(int argc, char **argv, int index)
 		goto cleanup;
 	}
 
-	signal(SIGINT, signalHandler);
-
-	for(;!done;){};
+	loop_till_interrupt(&skel->bss->enabled);
 
 cleanup:
 	mem_bpf__destroy(skel);
 	return err;
-	return 0;
 }
 
 int record_off_cpu(int argc, char **argv, int index)

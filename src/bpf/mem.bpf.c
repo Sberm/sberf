@@ -28,6 +28,9 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
+volatile bool enabled;
+volatile bool spec_pid;
+
 struct arg {
 	int syscall_nr;
 	unsigned long args[MAX_RAW_SYSCALL_ARGS];
@@ -52,13 +55,14 @@ volatile bool spec_pid;
 SEC("tp/syscalls/sys_enter_mmap")
 int mem_profile(struct arg* args)
 {
+	if (!enabled)
+		return 0;
+
 	u64 id = bpf_get_current_pid_tgid();
 	u32 pid = id >> 32;
 
 	if (filter_pid(pid))
 		return 0;
 	
-	bpf_printk("allocated %dKB", args->args[1] / 1000);
-
 	return 0;
 }
