@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include "stack.h"
 #include "record.skel.h"
-#include "record.h" // for key_t
+#include "record.h" // key_t
 #include "util.h"
 #include "off_cpu.h"
 
@@ -155,7 +155,6 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 
 		/* stack frame */
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kstack_id, frame);
-		/* kernel stack not available */
 		if (cur_key->kstack_id != -EFAULT) {
 			if (DEBUG && err)
 				printf("\n[kernel stack lost]\n");
