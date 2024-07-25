@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include "stack.h"
 #include "record.skel.h"
-#include "record.h" // key_t
+#include "record.h" /* for key_t */
 #include "util.h"
 #include "off_cpu.h"
 
@@ -85,7 +85,7 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 			stack_ag_p = malloc(sizeof(struct stack_ag));
 			stack_ag_p->next = NULL;
 			stack_ag_p->child = NULL;
-			stack_ag_p->addr = 0; // all's special address
+			stack_ag_p->addr = 0; /* a node named "all" has an address of 0 */
 			stack_ag_p->cnt = 0;
 			stack_ag_p->is_comm = false;
 		}
@@ -139,6 +139,7 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 	 * |_ child1(comm1)___ child2(comm2)___ child3(comm3)
 	 *      |_child11(sym11)     |_child21(sym21)
 	 */
+	// TODO: rewrite everything about comm
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
 		if (stack_ag_p == NULL) {
