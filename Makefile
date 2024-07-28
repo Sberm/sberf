@@ -1,11 +1,11 @@
 ifeq ($(DEBUG), 1)
 	Q =
 	msg =
-	CFLAGS = -g -std=c11
+	CFLAGS = -g
 else
 	Q = @
 	msg = @printf '	%-8s %s%s\n' "$(1)" "$(2)" "$(if $(3), $(3))";
-	CFLAGS = -O2 -std=c11
+	CFLAGS = -O2
 endif
 
 SBERF := sberf
@@ -46,7 +46,7 @@ SKEL := $(patsubst %.bpf.c, %.skel.h,$(BPF_FILE))
 SKEL_BUILT := $(addprefix $(SKEL_DIR)/,$(SKEL))
 
 # 所有.c文件的.o文件写在这里
-OBJS := sberf.o cli.o record.o plot.o stack.o util.o
+OBJS := sberf.o cli.o record.o plot.o stack.o util.o comm.o
 OBJS_FULL := $(addprefix $(OUTPUT)/,$(OBJS))
 
 INCLUDE := -Ivmlinux -Isrc -I/usr/include
@@ -76,7 +76,7 @@ $(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 	$(call msg,SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
-# .c --GCC--> .o
+# all in one
 # $(OUTPUT)/%.o: $(SRCDIR)/%.c $(SKEL_BUILT) $(SRCDIR)/$(wildcard %.h) $(UTILS) | $(OUTPUT)
 # 	$(call msg,CC,$@)
 # 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
@@ -89,14 +89,19 @@ $(OUTPUT)/cli.o: $(SRCDIR)/cli.c $(SRCDIR)/cli.h $(SRCDIR)/sub_commands.h | $(OU
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
 
-$(OUTPUT)/record.o: $(SRCDIR)/record.c $(SRCDIR)/record.h \
+$(OUTPUT)/record.o: $(SRCDIR)/record.c \
+		    $(SRCDIR)/record.h \
 		    $(SKEL_DIR)/record.skel.h \
 		    $(SKEL_DIR)/mem.skel.h \
 		    $(SKEL_DIR)/event.skel.h \
 		    $(SKEL_DIR)/off_cpu.skel.h \
 		    $(SKEL_DIR)/lock.skel.h \
-		    $(SRCDIR)/cli.h $(SRCDIR)/sub_commands.h \
-		    $(SRCDIR)/stack.h $(SRCDIR)/plot.h $(SRCDIR)/event.h $(SRCDIR)/off_cpu.h \
+		    $(SRCDIR)/cli.h \
+		    $(SRCDIR)/sub_commands.h \
+		    $(SRCDIR)/stack.h \
+		    $(SRCDIR)/plot.h \
+		    $(SRCDIR)/event.h \
+		    $(SRCDIR)/off_cpu.h \
 		    $(UTILS) | $(OUTPUT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
@@ -114,6 +119,10 @@ $(OUTPUT)/stack.o: $(SRCDIR)/stack.c $(SRCDIR)/stack.h $(SKEL_DIR)/record.skel.h
 $(OUTPUT)/util.o: $(SRCDIR)/util.c $(SRCDIR)/util.h | $(OUTPUT)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
+
+$(OUTPUT)/comm.o: $(SRCDIR)/comm.c $(SRCDIR)/comm.h | $(OUTPUT)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) -c $(filter %.c,$^) -o $@
 
 # all obj file will be stored in build directory
 $(OUTPUT):

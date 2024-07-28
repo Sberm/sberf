@@ -29,7 +29,6 @@
 
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
-#define __USE_MISC
 #define _GNU_SOURCE
 #include <unistd.h>
 
@@ -51,6 +50,7 @@
 #include "plot.h"
 #include "event.h"
 #include "off_cpu.h"
+#include "comm.h"
 
 #define TP_TRGR_PROG(index) skel->progs.tp_trgr_##index
 #define MAX_TP_TRGR_PROG 10 // max tracepoint trigger program
@@ -736,6 +736,7 @@ int record_pid(int argc, char **argv, int index)
 	struct usyms* usym_tb;
 	pid_t pids[MAX_PID];
 	struct perf_event_attr attr;
+	char *comm;
 
 	memset(&attr, 0, sizeof(attr));
 
@@ -751,6 +752,14 @@ int record_pid(int argc, char **argv, int index)
 	}
 
 	pid_nr = split_pid(env.pids, pids);
+
+	printf("Recording commands: ");
+	for (int i = 0; i < pid_nr; i++) {
+		comm = get_comm(pids[i]);
+		printf("%s ", comm);
+		free(comm);
+	}
+	printf("\n");
 
 	/* sberf record $pid is also legal */
 	if (!env.all_p && strlen(env.pids) == 0)

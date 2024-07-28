@@ -17,37 +17,9 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#include<stdio.h>
-#include <string.h>
-#include <fcntl.h>
-#include <unistd.h>
+#ifndef COMM_H
+#define COMM_H
 
-#include "comm.h"
+char *get_comm(int pid);
 
-#define PROC_COMM_FMT "/proc/%d/comm"
-
-char *get_comm(int pid)
-{
-	char path[128], buf[128];
-	int fd;
-
-	memset(buf, 0, sizeof(buf));
-
-	if (snprintf(path, sizeof(path), PROC_COMM_FMT, pid) <= 0) {
-		printf("Can't format path to procfs\n");
-		return NULL;
-	}
-
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		printf("Can't open procfs of %d for reading\n", pid);
-		return NULL;
-	}
-
-	if(read(fd, buf, sizeof(buf)) <= 0) {
-		printf("Can't read command from %s\n", path);
-		return NULL;
-	}
-
-	return strdup(buf);
-}
+#endif
