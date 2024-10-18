@@ -2,7 +2,8 @@
 <img width="200" src="images/sberf-transparent.png" /><img width="200" src="images/sberf-title.png" />
 </div>
 
-[![docs][docs-shield]][docs-url] [![version][version-shield]][version-url] 
+[![docs][docs-shield]][docs-url]
+[![version][version-shield]][version-url] 
 
 ![](images/sberf-graph.png)
 
@@ -120,7 +121,7 @@ DEBUG=1 make
 ```
 
 [docs-shield]: https://img.shields.io/badge/docs-here-FFDB1A
-[docs-url]: https://sberm.cn/sberf/docs
+[docs-url]: https://sberm.cn/sberf
 
-[version-shield]: https://img.shields.io/badge/version-v0.0.5-green
-[version-url]: https://github.com/Sberm/Sberf.c/releases
+[version-shield]: https://img.shields.io/github/v/release/sberm/sberf
+[version-url]: https://github.com/Sberm/sberf/releases
