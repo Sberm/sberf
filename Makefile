@@ -41,10 +41,7 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 | sed 's/riscv64/riscv/' \
 | sed 's/loongarch64/loongarch/')
 
-sberf: $(OBJS)
-	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(OBJS) $(INCLUDE) $(LIBS) -o $@
-
+# bpf
 $(SKEL_DIR)/%.bpf.o: $(BPF_DIR)/%.bpf.c $(SRC_DIR)/$(wildcard %.h) $(VMLINUX) $(UTILS) | $(SKEL_DIR)
 	$(call msg,"BPF-OBJ",$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
@@ -58,10 +55,16 @@ $(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 	$(call msg,BPF-SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
+# c
+sberf: $(OBJS)
+	$(call msg,CC,$@)
+	$(Q)$(CC) $(CFLAGS) $(OBJS) $(INCLUDE) $(LIBS) -o $@
+
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(SKEL) $(SRC_DIR)/$(wildcard %.h) $(UTILS) | $(OBJ_DIR)
 	$(call msg,CC,$@)
 	$(Q)$(CC) $(CFLAGS) -I$(SKEL_DIR) $(INCLUDE) -c $(filter %.c,$^) -o $@
 
+# directories
 $(OBJ_DIR):
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
