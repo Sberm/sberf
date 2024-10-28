@@ -18,7 +18,6 @@ SBERF := sberf
 BPFTOOL := bpftool
 CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
-VMLINUX ?= vmlinux/vmlinux.h
 
 # Statically linked to libbpf for quick distribution
 LIBS ?= -l:libbpf.a -lelf -lz -lpthread
@@ -29,10 +28,6 @@ BPF_FILE := $(addsuffix .bpf.c,$(BPF_FILE_))
 # record.skel.h
 SKEL_ := $(patsubst %.bpf.c,%.skel.h,$(BPF_FILE))
 SKEL := $(addprefix $(SKEL_DIR)/,$(SKEL_))
-
-# Utilities for BPF programs
-BPF_UTILS_ := bpf_util.h
-BPF_UTILS := $(addprefix $(SRC_DIR)/,$(BPF_UTILS_))
 
 # Normal object files for c programs
 OBJS_ := sberf.o cli.o record.o plot.o stack.o util.o comm.o
@@ -62,7 +57,7 @@ DEPFLAGS_BPF = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.bpf.d
 DEPFLAGS_TEST = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.test.d
 
 # BPF object (after clang and bpftool gen)
-$(SKEL_DIR)/%.bpf.o: $(BPF_DIR)/%.bpf.c $(VMLINUX) $(BPF_UTILS) | $(SKEL_DIR) $(DEPDIR)
+$(SKEL_DIR)/%.bpf.o: $(BPF_DIR)/%.bpf.c $(DEPDIR)/%.bpf.d | $(SKEL_DIR) $(DEPDIR)
 	$(call msg,BPF-OBJ,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(DEPFLAGS_BPF) \
 	-Ivmlinux -I$(SRC_DIR) -c $(filter $(BPF_DIR)/%.bpf.c,$^) \
