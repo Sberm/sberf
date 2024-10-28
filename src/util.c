@@ -35,7 +35,7 @@ void *print_loading(void *_args)
 	printf("\n");
 
 	while (true) {
-		printf("\33[%dD", strlen(str) + DOTS_NR);
+		printf("\33[%ldD", strlen(str) + DOTS_NR);
 		printf("\33[0K");
 		printf("%s", str);
 		fflush(stdout);

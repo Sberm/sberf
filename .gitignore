@@ -1,11 +1,11 @@
 # vscode settings
 .vscode
 
-# don't trace executable(including test executable)
+# Don't trace executable(including test executable)
 sberf
 tsb
 
-# build folder
+# Build folder
 build
 build_bpf
 
@@ -17,7 +17,7 @@ null
 *.o
 *.skel.h
 
-# 
+# Personal
 note
 zdeprecated
 nohup.out
@@ -26,3 +26,6 @@ nohup.out
 *.txt
 *.data
 perf.data.*
+
+# Dependency files
+.deps

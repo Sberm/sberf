@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <linux/perf_event.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
@@ -203,22 +204,22 @@ int print_stack_frame(unsigned long long *frame, unsigned long long sample_num, 
 	char name[128];
 	switch (mode) {
 	case PRINT_KERNEL:
-		printf("[kernel] %lu samples:\n", sample_num);
+		printf("[kernel] %llu samples:\n", sample_num);
 		for (int i = 0; frame[i] && i < MAX_STACK_DEPTH; i++) {
 			ksym_addr_to_sym((struct ksyms*)sym_tb, frame[i], name);
-			printf("  %lx %s\n", frame[i], name);
+			printf("  %llx %s\n", frame[i], name);
 		}
 	case PRINT_USER:
-		printf("[user] %lu samples:\n", sample_num);
+		printf("[user] %llu samples:\n", sample_num);
 		for (int i = 0; frame[i] && i < MAX_STACK_DEPTH; i++) {
 			usym_addr_to_sym((struct usyms*)sym_tb, frame[i], name);
-			printf("  %lx %s\n", frame[i], name);
+			printf("  %llx %s\n", frame[i], name);
 		}
 	case PRINT_OFF_CPU:
 		printf("[off-cpu] %.5fms:\n", (double)sample_num / 1000000UL);
 		for (int i = 0; frame[i] && i < MAX_STACKS; i++) {
 			usym_addr_to_sym((struct usyms*)sym_tb, frame[i], name);
-			printf("  %lx %s\n", frame[i], name);
+			printf("  %llx %s\n", frame[i], name);
 		}
 	}
 	printf("\n");
@@ -270,7 +271,7 @@ void print_stack(struct bpf_map *stack_map, struct bpf_map *sample, struct ksyms
 		last_key = cur_key;
 	} 
 
-	printf("Collected %d samples\n", sample_num_total);
+	printf("Collected %lld samples\n", sample_num_total);
 
 	free(frame);
 	close(stack_map_fd);
@@ -319,7 +320,7 @@ int split_event_str() {
 	char *token;
 	size_t index = 0;
 	token = strtok(env.tmp_str, ",");
-	while( token != NULL && index < ARRAY_LEN(event_names)) {
+	while(token != NULL && index < ARRAY_LEN(event_names)) {
 		strcpy(event_names[index++], token);
 		token = strtok(NULL, ",");
 	}
@@ -553,7 +554,9 @@ int record_syscall(int argc, char **argv, int index)
 	}
 
 	for (int i = 0; i < event_num && i < MAX_TP_TRGR_PROG; i++) {
-		sprintf(event_full, "sys_enter_%s", event_names[i]);
+		err = snprintf(event_full, sizeof(event_full), "sys_enter_%s", event_names[i]);
+		if (err < 0)
+			return err;
 
 		strcpy(tp_names[tp_i].name, event_names[i]);
 
@@ -584,7 +587,7 @@ int record_syscall(int argc, char **argv, int index)
 				cnt = 0;
 
 			sprintf(tmp, "%s", tp_names[i].name);
-			printf("    %-32s    %u\n", tmp, cnt);
+			printf("    %-32s    %llu\n", tmp, cnt);
 		}
 
 		printf("\n");
@@ -710,7 +713,7 @@ int record_tracepoint(int argc, char **argv, int index)
 				cnt = 0;
 
 			sprintf(tmp, "%s:%s", tp_names[i].category, tp_names[i].name);
-			printf("    %-46s    %u\n", tmp, cnt);
+			printf("    %-46s    %llu\n", tmp, cnt);
 		}
 
 		printf("\n");
@@ -834,7 +837,7 @@ int record_pid(int argc, char **argv, int index)
 	} else {
 		printf("Recording all processes ");
 	}
-	printf("in %d Hz\n", env.sample_freq);
+	printf("in %lld Hz\n", env.sample_freq);
 
 	loop_till_interrupt(&skel->bss->enabled);
 
@@ -1082,7 +1085,9 @@ int record_hardware(int argc, char **argv, int index)
 			cnt = 0;
 			for (int j = 0; j < cpu_nr; j++) {
 				ioctl(fds[i][j], PERF_EVENT_IOC_DISABLE, 0);
-				read(fds[i][j], &cnt_tmp, sizeof(cnt_tmp));
+				err = read(fds[i][j], &cnt_tmp, sizeof(cnt_tmp));
+				if (err)
+					return err;
 				cnt += cnt_tmp;
 			}
 			cnt_arr[i] = cnt;
@@ -1100,7 +1105,9 @@ int record_hardware(int argc, char **argv, int index)
 			cnt = 0;
 			for (int j = 0; j < cpu_nr; j++) {
 				ioctl(fds[i][j], PERF_EVENT_IOC_DISABLE, 0);
-				read(fds[i][j], &cnt_tmp, sizeof(cnt_tmp));
+				err = read(fds[i][j], &cnt_tmp, sizeof(cnt_tmp));
+				if (err)
+					return err;
 				cnt += cnt_tmp;
 			}
 			printf("  %-20s %-64llu\n", event_names[i], cnt);
@@ -1189,7 +1196,7 @@ int record_uprobe(int argc, char **argv, int index)
 		if (err)
 			cnt = 0;
 
-		printf("    %-46s    %u\n", env.uprobe_symbol, cnt);
+		printf("    %-46s    %llu\n", env.uprobe_symbol, cnt);
 
 		printf("\n");
 	} else {

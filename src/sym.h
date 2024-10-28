@@ -168,7 +168,7 @@ int lines_of_file(FILE* fp)
 	int cnt = 0;
 	char c;
 	while (1) {
-		int ret = fscanf(fp, "%*llx %c %*s%*[^\n]\n", &c);
+		int ret = fscanf(fp, "%*x %c %*s%*[^\n]\n", &c);
 		if (ret == EOF)
 			break;
 		if (ret != 1) {
