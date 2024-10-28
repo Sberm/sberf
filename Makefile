@@ -59,6 +59,7 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 DEPDIR := .deps
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 DEPFLAGS_BPF = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.bpf.d
+DEPFLAGS_TEST = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.test.d
 
 # BPF object (after clang and bpftool gen)
 $(SKEL_DIR)/%.bpf.o: $(BPF_DIR)/%.bpf.c $(VMLINUX) $(BPF_UTILS) | $(SKEL_DIR) $(DEPDIR)
@@ -102,9 +103,9 @@ $(SKEL_DIR):
 	$(Q)mkdir -p $@
 
 # Test
-TEST := test-sberf
-TEST_DIR = test
-TEST_OBJS_ = test.o
+TEST := test_sberf
+TEST_DIR := test
+TEST_OBJS_ := test.o
 TEST_OBJS := $(addprefix $(TEST_DIR)/,$(TEST_OBJS_))
 
 test: $(TEST)
@@ -114,9 +115,9 @@ $(TEST): $(TEST_OBJS)
 	$(Q)$(CC) $(CFLAGS) $(TEST_OBJS) -o $(TEST)
 
 # Includes the default include path as well as the test directory
-$(TEST_DIR)/%.o: $(TEST_DIR)/%.c $(DEPDIR)/%.d | $(DEPDIR)
+$(TEST_DIR)/%.o: $(TEST_DIR)/%.c $(DEPDIR)/%.test.d | $(DEPDIR)
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) $(INCLUDE) -I$(TEST_DIR) -c -o $@ $<
+	$(Q)$(CC) $(DEPFLAGS_TEST) $(CFLAGS) $(INCLUDE) -I$(TEST_DIR) -c -o $@ $<
 
 # Utilities
 clean-all:
@@ -132,8 +133,9 @@ clean:
 DEPFILES := $(OBJS_:%.o=$(DEPDIR)/%.d)
 # record.bpf.d
 DEPFILES += $(BPF_FILE:%.bpf.c=$(DEPDIR)/%.bpf.d)
-# test.d
+# test.test.d
 DEPFILES += $(TEST_OBJS_:%.o=$(DEPDIR)/%.test.d)
+
 $(DEPFILES):
 
 # Include all the generated dependencies

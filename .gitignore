@@ -3,7 +3,7 @@
 
 # Don't trace executable(including test executable)
 sberf
-tsb
+test_sberf
 
 # Build folder
 build
