@@ -34,17 +34,19 @@ static int inline filter_pid(pid_t pid)
 static void* bpf_map_lookup_insert(void *map, const void *key, const void *init_val)
 {
 	void *ret;
+	int err;
+
 	ret = bpf_map_lookup_elem(map, key);
 	if (ret) 
 		return ret;
 
-	int err = bpf_map_update_elem(map, key, init_val, BPF_NOEXIST);
+	err = bpf_map_update_elem(map, key, init_val, BPF_NOEXIST);
 	if (err)
 		return NULL;
 
 	ret = bpf_map_lookup_elem(map, key);
+
 	return ret;
 }
-
 
 #endif
