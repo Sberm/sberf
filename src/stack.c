@@ -180,51 +180,6 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 	return stack_ag_p;
 }
 
-// struct stack_ag *comm_lookup_insert(struct stack_ag *stack_ag_p, char* comm)
-// {
-// 	struct stack_ag *p, *pp, *q, *p_parent;
-// 	p = stack_ag_p->child;
-// 	p_parent = stack_ag_p;
-// 	pp = p;
-// 	q = NULL;
-// 
-// 	int flag = 0;
-// 
-// 	/* if command doesn't match, add a new one */
-// 	while (pp) {
-// 		if (strcmp(pp->comm, comm) == 0) {
-// 			p_parent = pp;
-// 			flag = 1;
-// 			break;
-// 		}
-// 		q = pp;
-// 		pp = pp->next;
-// 	}
-// 
-// 	if (!flag) {
-// 		struct stack_ag *tmp = malloc(sizeof(struct stack_ag));
-// 		if (tmp == NULL) {
-// 			return NULL;
-// 		}
-// 
-// 		tmp->next = NULL;
-// 		tmp->addr = 0;
-// 		tmp->child = NULL;
-// 		strcpy(tmp->comm, comm);
-// 		tmp->cnt = 0;
-// 		tmp->is_comm = true;
-// 
-// 		if (q) {
-// 			q->next = tmp;
-// 		} else {
-// 			p_parent->child = tmp;
-// 		}
-// 		p_parent = tmp;
-// 	}
-// 
-// 	return p_parent;
-// }
-
 int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, unsigned long long sample_num, int frame_sz)
 {
 	int err = 0;
