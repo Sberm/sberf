@@ -6,7 +6,6 @@
 ║ above copyright notice and this permission notice appear in all copies ║
 ╚═══════════════════════════════════════════════════════════════════════*/
 
-#include <stdio.h>
 #include "cli.h"
 
 int main(int argc, char** argv) 
