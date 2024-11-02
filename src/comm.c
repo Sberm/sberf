@@ -18,9 +18,10 @@
 char *get_comm(int pid)
 {
 	char path[128], buf[128];
+	ssize_t bytes;
 	int fd;
 
-	memset(buf, 0, sizeof(buf));
+	buf[0] = 0;
 
 	if (snprintf(path, sizeof(path), PROC_COMM_FMT, pid) <= 0) {
 		printf("Can't format path to procfs\n");
@@ -33,10 +34,14 @@ char *get_comm(int pid)
 		return NULL;
 	}
 
-	if(read(fd, buf, sizeof(buf)) <= 0) {
+	bytes = read(fd, buf, sizeof(buf));
+	if(bytes <= 0) {
 		printf("Can't read command from %s\n", path);
 		return NULL;
 	}
+
+	/* The comm in proc fs has a trailing newline */
+	buf[bytes - 1] = '\0';
 
 	return strdup(buf);
 }

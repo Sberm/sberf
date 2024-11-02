@@ -748,10 +748,15 @@ int record_pid(int argc, char **argv, int index)
 	printf("Recording: ");
 	for (int i = 0; i < pid_nr; i++) {
 		comm = get_comm(pids[i]);
-		printf("%s ", comm);
+		printf("%s", comm);
+
+		if (i != pid_nr - 1)
+			printf(", ");
+		else
+			printf("\n");
+
 		free(comm);
 	}
-	printf("\n");
 
 	/* sberf record $pid is also legal */
 	if (!env.all_p && strlen(env.pids) == 0)
