@@ -745,7 +745,7 @@ int record_pid(int argc, char **argv, int index)
 
 	pid_nr = split_pid(env.pids, pids);
 
-	printf("Recording commands: ");
+	printf("Recording: ");
 	for (int i = 0; i < pid_nr; i++) {
 		comm = get_comm(pids[i]);
 		printf("%s ", comm);
