@@ -456,19 +456,6 @@ int cmd_record(int argc, char **argv)
 	return err;
 }
 
-/*
-void syscall_handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
-{
-	struct stack_array *sa = data;
-	char name[128];
-	for (int i = 0;i < data_sz / sizeof(unsigned long) && sa->array[i];i++) {
-		usym_addr_to_sym(record__usym_tb, sa->array[i], name);
-		printf("0x%lx %s\n", sa->array[i], name);
-	}
-	printf("\n");
-}
-*/
-
 int record_syscall(int argc, char **argv, int index)
 {
 	struct event_bpf *skel;
