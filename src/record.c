@@ -715,7 +715,7 @@ int record_pid(int argc, char **argv, int index)
 	struct usyms* usym_tb;
 	pid_t pids[MAX_PID];
 	struct perf_event_attr attr;
-	char *comm;
+	char *comm[128];
 
 	memset(&attr, 0, sizeof(attr));
 
@@ -732,17 +732,26 @@ int record_pid(int argc, char **argv, int index)
 
 	pid_nr = split_pid(env.pids, pids);
 
+	for (int i = 0; i < min(pid_nr, ARRAY_LEN(comm)); i++) {
+		comm[i] = get_comm(pids[i]);
+		if (comm[i] == NULL) {
+			/* If failed to open procfs, free the commands array till this point */
+			pid_nr = i + 1;
+			goto err_open_pid;
+		}
+	}
+
 	printf("Recording: ");
-	for (int i = 0; i < pid_nr; i++) {
-		comm = get_comm(pids[i]);
-		printf("%s", comm);
+	for (int i = 0; i < min(pid_nr, ARRAY_LEN(comm)); i++) {
+		printf("%s", comm[i]);
 
 		if (i != pid_nr - 1)
 			printf(", ");
 		else
 			printf("\n");
 
-		free(comm);
+		free(comm[i]);
+		comm[i] = NULL;
 	}
 
 	/* sberf record $pid is also legal */
@@ -838,6 +847,15 @@ int record_pid(int argc, char **argv, int index)
 	}
 
 cleanup:
+	record_bpf__destroy(skel);
+	return err;
+
+err_open_pid:
+	for (int i = 0; i < min(pid_nr, ARRAY_LEN(comm)); i++) {
+		if (comm[i] != NULL)
+			free(comm[i]);
+	}
+
 	record_bpf__destroy(skel);
 	return err;
 }

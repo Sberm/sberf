@@ -30,7 +30,7 @@ char *get_comm(int pid)
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
-		printf("Can't open procfs of %d for reading\n", pid);
+		printf("Can't open procfs of %d\n", pid);
 		return NULL;
 	}
 
