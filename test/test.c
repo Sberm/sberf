@@ -39,8 +39,6 @@ void test_usym()
 		printf("%llx %s\n", dso_p.sym[i].addr, dso_p.sym[i].name);
 	}
 
-	/* sa 55e8c50bf000 ea 55e8c50dc000 */
-	/* 55e8c50e1da0 55e8c51939f0*/
 	printf("sa %llx ea %llx\n", dso_p.start_addr, dso_p.end_addr);
 }
 
@@ -50,9 +48,8 @@ void test_addr_to_name()
 	int pids[] = {1001};
 	struct usyms *usym_tb = usym_load(pids, 1);
 
-	if (ksym_tb != NULL && usym_tb != NULL) {
+	if (ksym_tb != NULL && usym_tb != NULL)
 		printf("Successfully loaded\n");
-	}
 
 	char name[256];
 	unsigned long long addr;

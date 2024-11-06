@@ -15,7 +15,7 @@
 #define MAX_STACK_DEPTH 32
 
 struct key_t {
-	__u32 pid;
+	pid_t pid;
 	int ustack_id;
 	int kstack_id;
 };

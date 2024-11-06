@@ -22,8 +22,6 @@
 #define _GNU_SOURCE
 #include <unistd.h>
 
-#include <time.h>
-
 #include "cli.h"
 #include "sub_commands.h"
 #include "util.h"
@@ -41,6 +39,15 @@
 #include "event.h"
 #include "off_cpu.h"
 #include "comm.h"
+
+clock_t new_timer() {
+	return clock();
+}
+
+void timer__elapsed(clock_t timer) {
+	clock_t diff = clock() - timer, msec = diff * 1000 / CLOCKS_PER_SEC;
+	printf("took %.4fs\n", (float)msec / 1000);
+}
 
 #define TP_TRGR_PROG(index) skel->progs.tp_trgr_##index
 #define MAX_TP_TRGR_PROG 10 // max tracepoint trigger program
@@ -191,6 +198,7 @@ int parse_hardware_flag(char *str)
 int print_stack_frame(unsigned long long *frame, unsigned long long sample_num, enum PRINT_MODE mode, void* sym_tb)
 {
 	char name[128];
+
 	switch (mode) {
 	case PRINT_KERNEL:
 		printf("[kernel] %llu samples:\n", sample_num);
@@ -211,7 +219,9 @@ int print_stack_frame(unsigned long long *frame, unsigned long long sample_num, 
 			printf("  %llx %s\n", frame[i], name);
 		}
 	}
+
 	printf("\n");
+
 	return 0;
 }
 
@@ -330,67 +340,60 @@ int split_pid(char *str, pid_t *pids) {
 	return index;
 }
 
-int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* off_cpu_time, int *pids, int pid_nr) {
+int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* off_cpu_time, struct comm_arr *comms) {
 	/* aggregate stack samples */
 	int pid_nr_tmp = 0;
 	struct stack_ag* stack_ag_p = NULL;
+	clock_t timer;
 
-	if (pid_nr == 0)
-		pid_nr_tmp = 1;
+	timer = new_timer();
 
-	stack_ag_p = stack_aggre_off_cpu(stack_map, off_cpu_time, pids, &pid_nr_tmp);
+	stack_ag_p = stack_aggre_off_cpu(stack_map, off_cpu_time, comms);
 
 	if (!stack_ag_p) {
 		printf("No stack data\n");
 		return -1;
 	}
 
-	if (pid_nr_tmp)
-		pid_nr = pid_nr_tmp;
-
-	if(plot_off_cpu(stack_ag_p, env.svg_file_name, pids, pid_nr)) {
-		printf("Failed to plot");
+	if(plot_off_cpu(stack_ag_p, env.svg_file_name, comms)) {
+		printf("Failed to plot off-cpu\n");
 		return -1;
 	} else {
 		printf("\nPlotted to %s\n", env.svg_file_name);
 	}
+
+	timer__elapsed(timer);
 
 	stack_free(stack_ag_p);
 
 	return 0;
 }
 
-int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, int *pids, int pid_nr) {
+int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, struct comm_arr *comms) {
 	/* aggregate stack samples */
-	int pid_nr_tmp = 0;
+	int pid_nr_tmp = 0, misc;
 	struct stack_ag* stack_ag_p = NULL;
+	clock_t timer;
 
-	if (pid_nr == 0)
-		pid_nr_tmp = 1;
+	timer = new_timer();
 
-	clock_t start = clock(), diff;
+	qsort(comms->comm_pid, comms->nr, sizeof(struct comm_pid), comm_compar);
 
-	stack_ag_p = stack_aggre(stack_map, sample, pids, &pid_nr_tmp);
-
+	stack_ag_p = stack_aggre(stack_map, sample, comms);
 	if (!stack_ag_p) {
-		printf("No stack data\n");
+		printf("Failed to aggregate stacks\n");
 		return -1;
 	}
 
-	if (pid_nr_tmp)
-		pid_nr = pid_nr_tmp;
-
 	/* plot the aggregated stack */
-	if(plot(stack_ag_p, env.svg_file_name, pids, pid_nr)) {
-		printf("Failed to plot");
+	if(plot(stack_ag_p, env.svg_file_name, comms)) {
+		printf("Failed to plot\n");
 		return -1;
 	} else {
 		printf("\nPlotted to %s\n", env.svg_file_name);
 	}
 
-	diff = clock() - start;
-	int msec = diff * 1000 / CLOCKS_PER_SEC;
-	printf("took %.4fs\n", (float)msec / 1000);
+	timer__elapsed(timer);
 
 	stack_free(stack_ag_p);
 
@@ -469,6 +472,7 @@ int record_syscall(int argc, char **argv, int index)
 	int err = 0, event_num, fd, one = 1, tp_i = 0;
 	unsigned long long cnt = 0;
 	char tmp[64];
+	struct comm_arr comms;
 
 	parse_opts_env(argc, argv, index, event_env, ARRAY_LEN(event_env));
 
@@ -568,7 +572,7 @@ int record_syscall(int argc, char **argv, int index)
 
 		printf("\n");
 	} else {
-		record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
+		record_plot(skel->maps.stack_map, skel->maps.sample, &comms);
 	}
 
 
@@ -588,6 +592,7 @@ int record_tracepoint(int argc, char **argv, int index)
 	pid_t pids[MAX_PID];
 	size_t pid_nr;
 	char tmp[64];
+	struct comm_arr comms;
 
 	parse_opts_env(argc, argv, index, event_env, ARRAY_LEN(event_env));
 
@@ -694,7 +699,7 @@ int record_tracepoint(int argc, char **argv, int index)
 
 		printf("\n");
 	} else {
-		record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
+		record_plot(skel->maps.stack_map, skel->maps.sample, &comms);
 	}
 
 cleanup:
@@ -711,11 +716,12 @@ int record_pid(int argc, char **argv, int index)
 	struct bpf_link* link;
 	size_t pid_nr;
 	unsigned long long freq, sample_freq;
-	struct ksyms* ksym_tb;
-	struct usyms* usym_tb;
+	struct ksyms *ksym_tb;
+	struct usyms *usym_tb;
 	pid_t pids[MAX_PID];
 	struct perf_event_attr attr;
 	char *comm[128];
+	struct comm_arr comms;
 
 	memset(&attr, 0, sizeof(attr));
 
@@ -732,28 +738,6 @@ int record_pid(int argc, char **argv, int index)
 
 	pid_nr = split_pid(env.pids, pids);
 
-	for (int i = 0; i < min(pid_nr, ARRAY_LEN(comm)); i++) {
-		comm[i] = get_comm(pids[i]);
-		if (comm[i] == NULL) {
-			/* If failed to open procfs, free the commands array till this point */
-			pid_nr = i + 1;
-			goto err_open_pid;
-		}
-	}
-
-	printf("Recording: ");
-	for (int i = 0; i < min(pid_nr, ARRAY_LEN(comm)); i++) {
-		printf("%s", comm[i]);
-
-		if (i != pid_nr - 1)
-			printf(", ");
-		else
-			printf("\n");
-
-		free(comm[i]);
-		comm[i] = NULL;
-	}
-
 	/* sberf record $pid is also legal */
 	if (!env.all_p && strlen(env.pids) == 0)
 		pid_nr = split_pid(argv[2], pids);
@@ -761,6 +745,30 @@ int record_pid(int argc, char **argv, int index)
 	if (!env.all_p && !pid_nr) {
 		__record_print_help();
 		return 0;
+	}
+
+	/* Array of commands for stack aggregation / pretty-printing */
+	comms.comm_pid = malloc(pid_nr * sizeof(struct comm_pid));
+	if (comms.comm_pid == NULL)
+		goto cleanup;
+
+	for (int i = 0; i < pid_nr; i++) {
+		err = get_comm(pids[i], comms.comm_pid[i].comm, sizeof(comms.comm_pid[i].comm));
+		comms.comm_pid[i].pid = pids[i];
+		if (err)
+			goto err_open_pid;
+	}
+
+	comms.nr = pid_nr;
+
+	printf("Recording: ");
+	for (int i = 0; i < pid_nr; i++) {
+		printf("%s", comms.comm_pid[i].comm);
+
+		if (i != pid_nr - 1)
+			printf(", ");
+		else
+			printf("\n");
 	}
 
 	/* update task_filter */
@@ -831,6 +839,10 @@ int record_pid(int argc, char **argv, int index)
 
 	loop_till_interrupt(&skel->bss->enabled);
 
+	/*
+	 * Recording ends here, we will handle the profile data, either by pretty printing or
+	 * dumping raw stack traces to the terminal.
+	 */
 	if (env.no_plot) {
 		ksym_tb = ksym_load();
 		usym_tb = usym_load(pids, pid_nr);
@@ -843,7 +855,8 @@ int record_pid(int argc, char **argv, int index)
 		ksym_free(ksym_tb);
 		usym_free(usym_tb);
 	} else {
-		record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
+		/* Symbol tables will be loaded in the plotter */
+		record_plot(skel->maps.stack_map, skel->maps.sample, &comms);
 	}
 
 cleanup:
@@ -851,11 +864,7 @@ cleanup:
 	return err;
 
 err_open_pid:
-	for (int i = 0; i < min(pid_nr, ARRAY_LEN(comm)); i++) {
-		if (comm[i] != NULL)
-			free(comm[i]);
-	}
-
+	free(comms.comm_pid);
 	record_bpf__destroy(skel);
 	return err;
 }
@@ -912,13 +921,39 @@ int record_off_cpu(int argc, char **argv, int index)
 	struct usyms *usym_tb;
 	int err = 0, pid_nr, one = 1, fd;
 	pid_t pids[MAX_PID];
+	struct comm_arr comms;
 
+	/* TODO: Dedup code in record_pid() and record_off_cpu() */
 	parse_opts_env(argc, argv, index, off_cpu_env, ARRAY_LEN(off_cpu_env));
 
 	pid_nr = split_pid(env.pids, pids);
 	if (!pid_nr && !env.all_p) {
 		__record_print_help();
 		return 0;
+	}
+
+	/* Array of commands for stack aggregation / pretty-printing */
+	comms.comm_pid = malloc(pid_nr * sizeof(struct comm_pid));
+	if (comms.comm_pid == NULL)
+		goto cleanup;
+
+	for (int i = 0; i < pid_nr; i++) {
+		err = get_comm(pids[i], comms.comm_pid[i].comm, sizeof(comms.comm_pid[i].comm));
+		comms.comm_pid[i].pid = pids[i];
+		if (err)
+			goto cleanup;
+	}
+
+	comms.nr = pid_nr;
+
+	printf("Recording: ");
+	for (int i = 0; i < pid_nr; i++) {
+		printf("%s", comms.comm_pid[i].comm);
+
+		if (i != pid_nr - 1)
+			printf(", ");
+		else
+			printf("\n");
 	}
 
 	skel = off_cpu_bpf__open();
@@ -973,10 +1008,11 @@ int record_off_cpu(int argc, char **argv, int index)
 
 		usym_free(usym_tb);
 	} else {
-		record_plot_off_cpu(skel->maps.stacks, skel->maps.off_cpu_time, pids, pid_nr);
+		record_plot_off_cpu(skel->maps.stacks, skel->maps.off_cpu_time, &comms);
 	}
 
 cleanup:
+	free(comms.comm_pid);
 	off_cpu_bpf__destroy(skel);
 	return err;
 }
@@ -988,11 +1024,7 @@ int record_numa(int argc, char **argv, int index)
 
 int record_hardware(int argc, char **argv, int index)
 {
-	/*
-	 * For pid-specific hardware events,
-	 * sberf now can only specify one
-	 * pid at a time.
-	 */
+	/* For pid-specific hardware events, sberf now can only specify one pid at a time. */
 	struct event_bpf *skel;
 	struct bpf_link* link;
 	struct perf_event_attr attr;
@@ -1134,6 +1166,7 @@ int record_uprobe(int argc, char **argv, int index)
 	size_t pid_nr;
 	int fd, one = 1, err = 0, zero = 0;
 	unsigned long long cnt;
+	struct comm_arr comms;
 
 	parse_opts_env(argc, argv, index, uprobe_env, ARRAY_LEN(uprobe_env));
 
@@ -1199,10 +1232,11 @@ int record_uprobe(int argc, char **argv, int index)
 
 		printf("\n");
 	} else {
-		record_plot(skel->maps.stack_map, skel->maps.sample, pids, pid_nr);
+		record_plot(skel->maps.stack_map, skel->maps.sample, &comms);
 	}
 
 cleanup:
+	free(comms.comm_pid);
 	event_bpf__destroy(skel);
 	return err;
 }

@@ -13,10 +13,11 @@
 #include "stack.h"
 #include "plot.h"
 #include "util.h"
+#include "comm.h"
+
 /*
- * don't include definition of sym.h, 
- * because it is included in record.c
- * therefore multiple definition
+ * Don't include definition of sym.h, because it is included in record.c therefore multiple
+ * definition
  */
 #define SYM_H_NO_DEF 
 #include "sym.h"
@@ -277,10 +278,11 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double y, do
 	__plot(p->child, p->cnt, x, y + FRAME_HEIGHT + Y_MARGIN, width, depth + 1, ksym_tb, usym_tb);
 }
 
-int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
+int plot_off_cpu(struct stack_ag *p, char* file_name, struct comm_arr *comms)
 {
 	struct ksyms* ksym_tb;
 	struct usyms* usym_tb;
+	int *pids;
 	pthread_t loading_thread;
 	struct loading_args la = {
 		.str = "loading symbols",
@@ -294,8 +296,14 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 
 	pthread_create(&loading_thread, NULL, print_loading, (void *)&la);
 
+	pids = malloc(comms->nr * sizeof(pid_t));
+	if (pids == NULL) {
+		printf("Failed to create pid array");
+		return -1;
+	}
+
 	ksym_tb = ksym_load();
-	usym_tb = usym_load(pids, num_of_pids);
+	usym_tb = usym_load(pids, comms->nr);
 	if (ksym_tb == NULL || usym_tb == NULL) {
 	    printf("Failed to load symbols when plotting\n");
 		return -1;
@@ -337,6 +345,7 @@ int plot_off_cpu(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pi
 
 cleanup:
 	free(svg_str);
+	free(pids);
 	fclose(fp);
 	ksym_free(ksym_tb);
 	usym_free(usym_tb);
@@ -344,10 +353,11 @@ cleanup:
 	return 0;
 }
 
-int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
+int plot(struct stack_ag *p, char* file_name, struct comm_arr *comms)
 {
 	struct ksyms* ksym_tb;
 	struct usyms* usym_tb;
+	int *pids;
 	pthread_t loading;
 	struct loading_args la = {
 		.str = "loading symbols",
@@ -361,8 +371,14 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 
 	pthread_create(&loading, NULL, print_loading, (void *)&la);
 
+	pids = malloc(comms->nr * sizeof(pid_t));
+	if (pids == NULL) {
+		printf("Failed to create pid array");
+		return -1;
+	}
+
 	ksym_tb = ksym_load();
-	usym_tb = usym_load(pids, num_of_pids);
+	usym_tb = usym_load(pids, comms->nr);
 	if (ksym_tb == NULL || usym_tb == NULL) {
 	    printf("Failed to load symbols when plotting\n");
 		return -1;
@@ -406,6 +422,7 @@ int plot(struct stack_ag *p, char* file_name, pid_t* pids, int num_of_pids)
 
 cleanup:
 	free(svg_str);
+	free(pids);
 	fclose(fp);
 	ksym_free(ksym_tb);
 	usym_free(usym_tb);

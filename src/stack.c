@@ -52,9 +52,68 @@ int stack_walk(struct stack_ag* p)
 	return stack_walk(p->child) + stack_walk(p->next) + p->cnt;
 }
 
-struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int *pid_nr)
+struct stack_ag* stack__find_comm(struct stack_ag *root, struct comm_arr *comms, pid_t pid)
 {
-	struct stack_ag *stack_ag_p = NULL;
+	struct stack_ag *comm_sections, *pre, *cur;
+	char *comm = comm__find_by_pid(comms, pid);
+	if (comm == NULL) {
+		printf("Cannot find the command of pid %d", pid);
+		return NULL;
+	}
+
+	/* If this command doesn't exist, create one */
+	if (root == NULL)
+		return NULL;
+
+	comm_sections = root->child;
+	if (comm_sections == NULL) {
+		root->child = malloc(sizeof(struct stack_ag));
+		if (root->child == NULL) {
+			printf("Failed to create the first command for stack aggregation\n");
+			return NULL;
+		}
+
+		comm_sections = root->child;
+		memset(comm_sections, 0, sizeof(struct stack_ag));
+
+		comm_sections->is_comm = true;
+		comm_sections->pid = pid;
+		strcpy(comm_sections->comm, comm);
+	}
+
+	pre = NULL;
+	cur = comm_sections;
+
+	while (cur) {
+		if (cur->pid == pid)
+			break;
+
+		pre = cur;
+		cur = cur->next;
+	}
+
+	if (cur == NULL && pre) {
+		pre->next = malloc(sizeof(struct stack_ag));
+		if (pre->next == NULL) {
+			printf("Failed to create a new command section for stack aggregation\n");
+			return NULL;
+		}
+
+		cur = pre->next;
+
+		memset(cur, 0, sizeof(struct stack_ag));
+
+		cur->is_comm = true;
+		cur->pid = pid;
+		strcpy(cur->comm, comm);
+	}
+
+	return cur;
+}
+
+struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_arr *comms)
+{
+	struct stack_ag *root = NULL;
 
 	int stack_map_fd = bpf_map__fd(stack_map);
 	int sample_fd = bpf_map__fd(sample);
@@ -69,14 +128,14 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 	unsigned long long cnt = 0;
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
-		if (stack_ag_p == NULL) {
+		if (root == NULL) {
 			/* initialize root stack aggregation pointer */
-			stack_ag_p = malloc(sizeof(struct stack_ag));
-			stack_ag_p->next = NULL;
-			stack_ag_p->child = NULL;
-			stack_ag_p->addr = 0; /* a node named "all" has an address of 0 */
-			stack_ag_p->cnt = 0;
-			stack_ag_p->is_comm = false;
+			root = malloc(sizeof(struct stack_ag));
+			root->next = NULL;
+			root->child = NULL;
+			root->addr = 0; /* a node named "all" has an address of 0 */
+			root->cnt = 0;
+			root->is_comm = false;
 		}
 
 		bpf_map_lookup_elem(sample_fd, cur_key, &sample_time);
@@ -85,30 +144,23 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 		if (DEBUG && err) {
 			printf("\n[user stack lost]\n");
 		} else {
-			if (pids_i < MAX_PID && *pid_nr && !find_pid(pids, cur_key->tgid, pids_i)) {
-				pids[pids_i++] = cur_key->tgid;
-				qsort(pids, pids_i, sizeof(int), compar);
-			}
-
-			stack_ag_p->cnt += sample_time;
-			stack_insert(stack_ag_p, frame, sample_time, MAX_STACK_DEPTH);
+			root->cnt += sample_time;
+			stack_insert(root, frame, sample_time, MAX_STACK_DEPTH);
 			++cnt;
 		}
 
 		last_key = cur_key;
 	} 
 
-	*pid_nr = pids_i;
-
 	printf("\nCollected %llu samples\n", cnt);
 
 	free(frame);
-	return stack_ag_p;
+	return root;
 }
 
-struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, int *pids, int *pid_nr)
+struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_arr *comms)
 {
-	struct stack_ag *stack_ag_p = NULL;
+	struct stack_ag *root = NULL, *comm_entry;
 
 	int stack_map_fd = bpf_map__fd(stack_map);
 	int sample_fd = bpf_map__fd(sample);
@@ -118,10 +170,8 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 	struct key_t *last_key = &a;
 	struct key_t *cur_key = &b;
 
-	unsigned long long *frame = calloc(MAX_STACK_DEPTH, 
-					   sizeof(unsigned long long)), 
-		      		    sample_num = 0,
-				    cnt = 0;
+	unsigned long long *frame = calloc(MAX_STACK_DEPTH, sizeof(unsigned long long)),
+					   sample_num = 0, cnt = 0;
 
 	/*
 	 * root
@@ -131,14 +181,14 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 	// TODO: rewrite everything about comm
 
 	while (bpf_map_get_next_key(sample_fd, last_key, cur_key) == 0) {
-		if (stack_ag_p == NULL) {
+		if (root == NULL) {
 			/* initialize root stack aggregation pointer */
-			stack_ag_p = malloc(sizeof(struct stack_ag));
-			stack_ag_p->next = NULL;
-			stack_ag_p->child = NULL;
-			stack_ag_p->addr = 0; // all's special address
-			stack_ag_p->cnt = 0;
-			stack_ag_p->is_comm = false;
+			root = malloc(sizeof(struct stack_ag));
+			root->next = NULL;
+			root->child = NULL;
+			root->addr = 0; // all's special address
+			root->cnt = 0;
+			root->is_comm = false;
 		}
 
 		bpf_map_lookup_elem(sample_fd, cur_key, &sample_num);
@@ -149,8 +199,8 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 			if (DEBUG && err)
 				printf("\n[kernel stack lost]\n");
 			else {
-				stack_ag_p->cnt += sample_num;
-				stack_insert(stack_ag_p, frame, sample_num, MAX_STACK_DEPTH);
+				root->cnt += sample_num;
+				stack_insert(root, frame, sample_num, MAX_STACK_DEPTH);
 				++cnt;
 			}
 		}
@@ -159,38 +209,36 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 		if (DEBUG && err)
 			printf("\n[user stack lost]\n");
 		else {
-			if (pids_i < MAX_PID && *pid_nr && !find_pid(pids, cur_key->pid, pids_i)) {
-				pids[pids_i++] = cur_key->pid;
-				qsort(pids, pids_i, sizeof(int), compar);
-			}
+			root->cnt += sample_num;
 
-			stack_ag_p->cnt += sample_num;
-			stack_insert(stack_ag_p, frame, sample_num, MAX_STACK_DEPTH);
+			comm_entry = stack__find_comm(root, comms, cur_key->pid);
+			if (comm_entry == NULL)
+				return NULL;
+
+			stack_insert(comm_entry, frame, sample_num, MAX_STACK_DEPTH);
 			++cnt;
 		}
 
 		last_key = cur_key;
 	} 
 
-	*pid_nr = pids_i;
-
 	printf("\nCollected %llu samples\n", cnt);
 
 	free(frame);
-	return stack_ag_p;
+	return root;
 }
 
-int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, unsigned long long sample_num, int frame_sz)
+int stack_insert(struct stack_ag* root, unsigned long long* frame, unsigned long long sample_num, int frame_sz)
 {
 	int err = 0;
 
-	if (stack_ag_p == NULL) {
+	if (root == NULL) {
 		printf("No stacks sample found\n");
 		err = -1;
 		goto return_err;
 	}
 
-	struct stack_ag *p = stack_ag_p;
+	struct stack_ag *p = root;
 	int index = 0;
 	struct stack_ag *p_parent = NULL;
 
@@ -272,20 +320,20 @@ void stack_free(struct stack_ag* p) {
 
 static unsigned depth = 1;
 
-void stack_get_depth_prvt(struct stack_ag* p, unsigned d)
+void __stack_get_depth(struct stack_ag* p, unsigned d)
 {
 	if (p == NULL) {
 		depth = max(depth, d - 1);
 		return;
 	}
-	stack_get_depth_prvt(p->child, d + 1);
-	stack_get_depth_prvt(p->next, d);
+	__stack_get_depth(p->child, d + 1);
+	__stack_get_depth(p->next, d);
 }
 
 int stack_get_depth(struct stack_ag* p)
 {
 	depth = 1;
-	stack_get_depth_prvt(p, depth);
+	__stack_get_depth(p, depth);
 	return depth;
 }
 

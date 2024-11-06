@@ -10,14 +10,31 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "comm.h"
 
 #define PROC_COMM_FMT "/proc/%d/comm"
 
-char *get_comm(int pid)
+char *comm__find_by_pid(struct comm_arr *comms, pid_t pid)
 {
-	char path[128], buf[128];
+	struct comm_pid comm_pid = {
+		.pid = pid,
+	};
+
+	struct comm_pid *res;
+
+	/* We assume that this array of commands is sorted */
+	res = bsearch(&comm_pid, comms->comm_pid, comms->nr, sizeof(struct comm_pid), comm_compar);
+	if (res == NULL)
+		return NULL;
+
+	return res->comm;
+}
+
+int get_comm(int pid, char *buf, int buf_size)
+{
+	char path[128];
 	ssize_t bytes;
 	int fd;
 
@@ -25,23 +42,23 @@ char *get_comm(int pid)
 
 	if (snprintf(path, sizeof(path), PROC_COMM_FMT, pid) <= 0) {
 		printf("Can't format path to procfs\n");
-		return NULL;
+		return -1;
 	}
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
 		printf("Can't open procfs of %d\n", pid);
-		return NULL;
+		return -1;
 	}
 
-	bytes = read(fd, buf, sizeof(buf));
+	bytes = read(fd, buf, buf_size);
 	if(bytes <= 0) {
 		printf("Can't read command from %s\n", path);
-		return NULL;
+		return -1;
 	}
 
 	/* The comm in proc fs has a trailing newline */
 	buf[bytes - 1] = '\0';
 
-	return strdup(buf);
+	return 0;
 }

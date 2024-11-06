@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+
 #include "util.h"
 
 #define DOTS_NR 5
