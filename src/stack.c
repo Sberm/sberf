@@ -56,14 +56,15 @@ struct stack_ag* stack__find_comm(struct stack_ag *root, struct comm_arr *comms,
 {
 	struct stack_ag *comm_sections, *pre, *cur;
 	char *comm = comm__find_by_pid(comms, pid);
+	if (root == NULL) {
+		printf("stack aggregation root is null\n");
+		return NULL;
+	}
+
 	if (comm == NULL) {
 		printf("Cannot find the command of pid %d", pid);
 		return NULL;
 	}
-
-	/* If this command doesn't exist, create one */
-	if (root == NULL)
-		return NULL;
 
 	comm_sections = root->child;
 	if (comm_sections == NULL) {
@@ -76,6 +77,7 @@ struct stack_ag* stack__find_comm(struct stack_ag *root, struct comm_arr *comms,
 		comm_sections = root->child;
 		memset(comm_sections, 0, sizeof(struct stack_ag));
 
+		printf("creating entry for pid %d\n", pid);
 		comm_sections->is_comm = true;
 		comm_sections->pid = pid;
 		strcpy(comm_sections->comm, comm);
@@ -86,13 +88,14 @@ struct stack_ag* stack__find_comm(struct stack_ag *root, struct comm_arr *comms,
 
 	while (cur) {
 		if (cur->pid == pid)
-			break;
+			return cur;
 
 		pre = cur;
 		cur = cur->next;
 	}
 
-	if (cur == NULL && pre) {
+	// command entry not found
+	if (pre) {
 		pre->next = malloc(sizeof(struct stack_ag));
 		if (pre->next == NULL) {
 			printf("Failed to create a new command section for stack aggregation\n");
@@ -193,18 +196,24 @@ struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, 
 
 		bpf_map_lookup_elem(sample_fd, cur_key, &sample_num);
 
-		/* stack frame */
+		/* kernel stack */
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->kstack_id, frame);
 		if (cur_key->kstack_id != -EFAULT) {
 			if (DEBUG && err)
 				printf("\n[kernel stack lost]\n");
 			else {
 				root->cnt += sample_num;
-				stack_insert(root, frame, sample_num, MAX_STACK_DEPTH);
+
+				comm_entry = stack__find_comm(root, comms, cur_key->pid);
+				if (comm_entry == NULL)
+					return NULL;
+
+				stack_insert(comm_entry, frame, sample_num, MAX_STACK_DEPTH);
 				++cnt;
 			}
 		}
 
+		/* user stack */
 		err = bpf_map_lookup_elem(stack_map_fd, &cur_key->ustack_id, frame);
 		if (DEBUG && err)
 			printf("\n[user stack lost]\n");
