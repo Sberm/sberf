@@ -110,7 +110,6 @@ int sched_switch(u64 *ctx)
 	};
 
 	if (check_thread(prev)) {
-		// int stack_id = bpf_get_stackid(ctx, &stacks, BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
 		int stack_id = bpf_get_stackid(ctx, &stacks, BPF_F_USER_STACK);
 		id = bpf_map_lookup_insert(&internal_map, &key_p, &tmp);
 		if (id) {
