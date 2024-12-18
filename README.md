@@ -108,10 +108,10 @@ DEBUG=1 make
 
 ### TODO
 
-[ ] Use perf_event instead of relying on frequently lost eBPF stack trace
-[ ] Mem profiling
-[ ] Lock wait time
-[ ] OpenTelemetry or any popular format compatibility
+- [ ] Use libperf instead of eBPF stack trace
+- [ ] Mem profiling
+- [ ] Lock wait time
+- [ ] OpenTelemetry or any popular format compatibility
 
 [docs-shield]: https://img.shields.io/badge/docs-here-FFDB1A
 [docs-url]: https://sberm.cn/sberf
