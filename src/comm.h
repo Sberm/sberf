@@ -14,7 +14,7 @@ struct comm_pid {
 	pid_t pid;
 };
 
-struct comm_arr {
+struct comm_pids {
 	struct comm_pid *comm_pid;
 	size_t nr;
 };
@@ -30,7 +30,7 @@ static inline int comm_compar(const void *__a, const void *__b)
 		return -1;
 }
 
-char *comm__find_by_pid(struct comm_arr *comm, pid_t pid);
+char *comm__find_by_pid(struct comm_pids *comm, pid_t pid);
 int get_comm(int pid, char *buf, int buf_size);
 
 #endif

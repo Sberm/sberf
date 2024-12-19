@@ -26,8 +26,8 @@ struct stack_ag {
 };
 
 int stack_walk(struct stack_ag* p);
-struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_arr *comms);
-struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_arr *comms);
+struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_pids *comms);
+struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_pids *comms);
 int stack_insert(struct stack_ag* stack_ag_p, unsigned long long* frame, unsigned long long sample_num, int frame_sz);
 void stack_free(struct stack_ag* stack_ag_p);
 int stack_get_least_sample(struct stack_ag* p);

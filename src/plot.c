@@ -278,7 +278,7 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double y, do
 	__plot(p->child, p->cnt, x, y + FRAME_HEIGHT + Y_MARGIN, width, depth + 1, ksym_tb, usym_tb);
 }
 
-int plot_off_cpu(struct stack_ag *p, char* file_name, struct comm_arr *comms)
+int plot_off_cpu(struct stack_ag *p, char* file_name, struct comm_pids *comms)
 {
 	struct ksyms* ksym_tb;
 	struct usyms* usym_tb;
@@ -353,7 +353,7 @@ cleanup:
 	return 0;
 }
 
-int plot(struct stack_ag *p, char* file_name, struct comm_arr *comms)
+int plot(struct stack_ag *p, char* file_name, struct comm_pids *comms)
 {
 	struct ksyms* ksym_tb;
 	struct usyms* usym_tb;

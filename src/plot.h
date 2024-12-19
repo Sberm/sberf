@@ -11,7 +11,7 @@
 
 #include "comm.h"
 
-int plot(struct stack_ag *p, char *file_name, struct comm_arr *comms);
-int plot_off_cpu(struct stack_ag *p, char *file_name, struct comm_arr *comms);
+int plot(struct stack_ag *p, char *file_name, struct comm_pids *comms);
+int plot_off_cpu(struct stack_ag *p, char *file_name, struct comm_pids *comms);
 
 #endif

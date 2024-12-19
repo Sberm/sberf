@@ -52,7 +52,7 @@ int stack_walk(struct stack_ag* p)
 	return stack_walk(p->child) + stack_walk(p->next) + p->cnt;
 }
 
-struct stack_ag* stack__find_comm(struct stack_ag *root, struct comm_arr *comms, pid_t pid)
+struct stack_ag* stack__find_comm(struct stack_ag *root, struct comm_pids *comms, pid_t pid)
 {
 	struct stack_ag *comm_sections, *pre, *cur;
 	char *comm = comm__find_by_pid(comms, pid);
@@ -114,7 +114,7 @@ struct stack_ag* stack__find_comm(struct stack_ag *root, struct comm_arr *comms,
 	return cur;
 }
 
-struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_arr *comms)
+struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_pids *comms)
 {
 	struct stack_ag *root = NULL;
 
@@ -161,7 +161,7 @@ struct stack_ag* stack_aggre_off_cpu(struct bpf_map *stack_map, struct bpf_map *
 	return root;
 }
 
-struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_arr *comms)
+struct stack_ag* stack_aggre(struct bpf_map *stack_map, struct bpf_map *sample, struct comm_pids *comms)
 {
 	struct stack_ag *root = NULL, *comm_entry;
 

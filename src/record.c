@@ -340,7 +340,7 @@ int split_pid(char *str, pid_t *pids) {
 	return index;
 }
 
-int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* off_cpu_time, struct comm_arr *comms) {
+int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* off_cpu_time, struct comm_pids *comms) {
 	/* aggregate stack samples */
 	int pid_nr_tmp = 0;
 	struct stack_ag* stack_ag_p = NULL;
@@ -369,7 +369,7 @@ int record_plot_off_cpu(struct bpf_map* stack_map, struct bpf_map* off_cpu_time,
 	return 0;
 }
 
-int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, struct comm_arr *comms) {
+int record_plot(struct bpf_map* stack_map, struct bpf_map* sample, struct comm_pids *comms) {
 	/* aggregate stack samples */
 	int pid_nr_tmp = 0, misc;
 	struct stack_ag* stack_ag_p = NULL;
@@ -472,7 +472,7 @@ int record_syscall(int argc, char **argv, int index)
 	int err = 0, event_num, fd, one = 1, tp_i = 0;
 	unsigned long long cnt = 0;
 	char tmp[64];
-	struct comm_arr comms;
+	struct comm_pids comms;
 
 	parse_opts_env(argc, argv, index, event_env, ARRAY_LEN(event_env));
 
@@ -592,7 +592,7 @@ int record_tracepoint(int argc, char **argv, int index)
 	pid_t pids[MAX_PID];
 	size_t pid_nr;
 	char tmp[64];
-	struct comm_arr comms;
+	struct comm_pids comms;
 
 	parse_opts_env(argc, argv, index, event_env, ARRAY_LEN(event_env));
 
@@ -721,7 +721,7 @@ int record_pid(int argc, char **argv, int index)
 	pid_t pids[MAX_PID];
 	struct perf_event_attr attr;
 	char *comm[128];
-	struct comm_arr comms;
+	struct comm_pids comms;
 
 	memset(&attr, 0, sizeof(attr));
 
@@ -921,7 +921,7 @@ int record_off_cpu(int argc, char **argv, int index)
 	struct usyms *usym_tb;
 	int err = 0, pid_nr, one = 1, fd;
 	pid_t pids[MAX_PID];
-	struct comm_arr comms;
+	struct comm_pids comms;
 
 	/* TODO: Dedup code in record_pid() and record_off_cpu() */
 	parse_opts_env(argc, argv, index, off_cpu_env, ARRAY_LEN(off_cpu_env));
@@ -1166,7 +1166,7 @@ int record_uprobe(int argc, char **argv, int index)
 	size_t pid_nr;
 	int fd, one = 1, err = 0, zero = 0;
 	unsigned long long cnt;
-	struct comm_arr comms;
+	struct comm_pids comms;
 
 	parse_opts_env(argc, argv, index, uprobe_env, ARRAY_LEN(uprobe_env));
 

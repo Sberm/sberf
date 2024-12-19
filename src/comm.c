@@ -16,7 +16,7 @@
 
 #define PROC_COMM_FMT "/proc/%d/comm"
 
-char *comm__find_by_pid(struct comm_arr *comms, pid_t pid)
+char *comm__find_by_pid(struct comm_pids *comms, pid_t pid)
 {
 	struct comm_pid comm_pid = {
 		.pid = pid,
