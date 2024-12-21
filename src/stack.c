@@ -18,6 +18,8 @@
 #define DEBUG false
 #define MAX_PID 128
 
+static const char comm_empty[16] = "empty";
+
 bool find_pid(int *pids, int pid, int len)
 {
 	int l = 0, h = len - 1, m, pid_tmp;
@@ -56,15 +58,14 @@ struct stack_ag* stack__find_comm(struct stack_ag *root, struct comm_pids *comms
 {
 	struct stack_ag *comm_sections, *pre, *cur;
 	char *comm = comm__find_by_pid(comms, pid);
+
 	if (root == NULL) {
 		printf("stack aggregation root is null\n");
 		return NULL;
 	}
 
-	if (comm == NULL) {
-		printf("Cannot find the command of pid %d", pid);
-		return NULL;
-	}
+	if (comm == NULL)
+		comm = (char *)comm_empty;
 
 	comm_sections = root->child;
 	if (comm_sections == NULL) {
