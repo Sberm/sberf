@@ -56,6 +56,8 @@ DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 DEPFLAGS_BPF = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.bpf.d
 DEPFLAGS_TEST = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.test.d
 
+all: $(SBERF)
+
 # BPF object (after clang and bpftool gen)
 $(SKEL_DIR)/%.bpf.o: $(BPF_DIR)/%.bpf.c $(DEPDIR)/%.bpf.d | $(SKEL_DIR) $(DEPDIR)
 	$(call msg,BPF-OBJ,$@)
@@ -71,10 +73,22 @@ $(SKEL_DIR)/%.skel.h: $(SKEL_DIR)/%.bpf.o | $(SKEL_DIR)
 	$(call msg,BPF-SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
+RUST_DIR := rust
+_RUST_SRC := lib.rs
+RUST_SRC := $(addprefix $(RUST_DIR)/src/,$(_RUST_SRC))
+_RUST_LIB := libsberf_rs.a
+RUST_LIB := $(addprefix $(RUST_DIR)/target/release/,$(_RUST_LIB))
+
+# Cargo.toml is not included because it might trigger a rebuild everytime, for the rust
+# lib is not guaranteed to be rebuilt by cargo whenever Cargo.toml is changed
+$(RUST_LIB): $(RUST_SRC)
+	$(call msg,CARGO,$@)
+	$(Q)make -C $(RUST_DIR) all
+
 # BPF skeletons have to be built before objs for the first-time generation
-sberf: $(SKEL) $(OBJS)
+$(SBERF): $(SKEL) $(OBJS) $(RUST_LIB)
 	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(OBJS) $(INCLUDE) $(LIBS) -o $@
+	$(Q)$(CC) $(CFLAGS) $(OBJS) $(INCLUDE) $(LIBS) $(RUST_LIB) -o $@
 
 # Generate dependency graph while building
 COMPILE_AND_GEN_DEP = $(CC) $(DEPFLAGS) $(CFLAGS) -c
@@ -117,11 +131,11 @@ $(TEST_DIR)/%.o: $(TEST_DIR)/%.c $(DEPDIR)/%.test.d | $(DEPDIR)
 # Utilities
 clean-all:
 	$(call msg,CLEAN-ALL)
-	$(Q)rm -rf $(SKEL_DIR) $(OBJ_DIR) $(SBERF) $(DEPDIR) $(TEST)
+	$(Q)rm -rf $(TEST) $(SKEL_DIR) $(OBJ_DIR) $(SBERF) $(DEPDIR) $(RUST_LIB)
 
 clean:
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(SKEL_DIR) $(OBJ_DIR) $(SBERF) $(DEPDIR)
+	$(Q)rm -rf $(SKEL_DIR) $(OBJ_DIR) $(SBERF) $(DEPDIR) $(RUST_LIB)
 
 # For dependencies generation
 # record.d

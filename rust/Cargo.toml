@@ -1,0 +1,8 @@
+[package]
+name = "sberf-rs" # will be renamed to libsberf_rs.a
+version = "0.0.1"
+edition = "2021"
+authors = ["Howard Chu <howardchu95@gmail.com>"]
+
+[lib]
+crate-type = ["staticlib"]

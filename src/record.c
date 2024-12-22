@@ -181,6 +181,8 @@ struct tp_name {
 	char name[48];
 };
 
+extern int sixty_nine();
+
 static void signalHandler(int signum)
 {
 	done = true;
@@ -722,6 +724,9 @@ int record_pid(int argc, char **argv, int index)
 	struct perf_event_attr attr;
 	char *comm[128];
 	struct comm_pids comms;
+
+	int _69 = sixty_nine();
+	printf("%d!\n", _69);
 
 	memset(&attr, 0, sizeof(attr));
 
