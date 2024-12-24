@@ -57,7 +57,7 @@ int profile(struct bpf_perf_event_data *ctx)
 	struct key_t key = {};
 
 	key.pid = pid;
-	key.kstack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
+	// key.kstack_id = bpf_get_stackid(&ctx->regs, &stack_map, 0);
 	key.ustack_id = bpf_get_stackid(&ctx->regs, &stack_map, 
 					BPF_F_USER_STACK | BPF_F_FAST_STACK_CMP);
 

@@ -6,3 +6,6 @@ authors = ["Howard Chu <howardchu95@gmail.com>"]
 
 [lib]
 crate-type = ["staticlib"]
+
+[dependencies]
+blazesym = "=0.2.0-rc.2"

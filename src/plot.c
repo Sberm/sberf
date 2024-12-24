@@ -15,6 +15,8 @@
 #include "util.h"
 #include "comm.h"
 
+extern int symbolize(pid_t pid, unsigned long long addr, char *buf, size_t len);
+
 /*
  * Don't include definition of sym.h, because it is included in record.c therefore multiple
  * definition
@@ -221,11 +223,10 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double y, do
 	if (p == NULL)
 		return;
 
-	// double y = depth * FRAME_HEIGHT;
 	double width = ((double)p->cnt / (double)p_cnt) * len;
 	double height = FRAME_HEIGHT;
 	int c = color_palette[color_index];
-	char frame_title[128];
+	char frame_title[128] = { [0] = '\0' };
 	char g_str[1024];
 
 	color_index = color_index + 1 > color_palette_sz - 1 ? 0 : color_index + 1;
@@ -235,7 +236,8 @@ void __plot(struct stack_ag* p, unsigned long long p_cnt, double x, double y, do
 	} else if (p->is_comm) {
 		strcpy(frame_title, p->comm);
 	} else {
-		addr_to_sym(ksym_tb, usym_tb, p->addr, frame_title);
+		// addr_to_sym(ksym_tb, usym_tb, p->addr, frame_title);
+		symbolize(1445742, p->addr, (char *)frame_title, sizeof(frame_title));
 	}
 
 	switch (plot_mode) {
